@@ -21,6 +21,11 @@ void zle_uzywane(const char *const nazwa_programu)
 	fatal("Program uruchamia się %s\n", nazwa_programu);
 }
 
+typedef struct {
+	int sockfd;
+	int family;
+} arg_keepalive;
+
 int main()
 {
 	return EXIT_SUCCESS;

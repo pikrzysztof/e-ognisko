@@ -23,5 +23,6 @@ void zle_uzywane(const char *const nazwa_programu)
 
 int main()
 {
+	FIFO kolejki[MAX_CLIENTS]
 	return EXIT_SUCCESS;
 }
