@@ -1,4 +1,7 @@
 #include "biblioteka_serwera.h"
+#include "kolejka.h"
+#include "wspolne.h"
+#include "err.h"
 #include <inttypes.h>
 #include <assert.h>
 #include <stdlib.h>

@@ -93,8 +93,10 @@ int jest_pelna(FIFO *const fifo)
 		/* Lepiej powiedzieć, że pełna niż ryzykować. */
 		return -1;
 	}
-	fifo->liczba_zuzytych_miejsc == fifo->maksymalna_liczba_elementow ?
-		wynik = 1 : wynik = 0;
+	if (fifo->liczba_zuzytych_miejsc == fifo->maksymalna_liczba_elementow)
+		wynik = 1;
+	else
+		wynik = 0;
 	if (!V(fifo->mutex)) {
 		/* Tutaj właściwie już będzie pogrom, bo nic nie zrobimy. */
 		return -1;
@@ -171,7 +173,6 @@ int16_t top_FIFO(FIFO *const fifo)
 {
 	int16_t wynik;
 	if (!P(fifo->mutex)) {
-		errno
 		return -1;
 	}
 	if (fifo->liczba_zuzytych_miejsc == 0) {
