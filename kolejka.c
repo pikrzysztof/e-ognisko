@@ -1,3 +1,10 @@
+/* Trzeci program zaliczeniowy z sieci komputerowych. */
+/* Napisany przez Krzysztofa Piecucha, */
+/* studenta informatyki k MISMaP UW */
+/* numer albumu 332534 */
+/* W projekcie zostały wykorzystane fragmenty kodu z zajęć. */
+/* kodowanie UTF-8 */
+
 #include "kolejka.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -5,6 +12,7 @@
 #include <semaphore.h>
 #include <inttypes.h>
 
+/* Podaje false jak się nie uda operacja systemowa. */
 bool V(sem_t *semafor)
 {
 	if (sem_post(semafor) != 0) {
@@ -14,6 +22,7 @@ bool V(sem_t *semafor)
 	return true;
 }
 
+/* Podaje false jak się nie uda operacja systemowa. */
 bool P(sem_t *semafor)
 {
 	if (sem_wait(semafor) != 0) {
@@ -79,13 +88,13 @@ FIFO* zrob_FIFO()
 
 int jest_pelna(FIFO *const fifo)
 {
-	bool wynik;
+	int wynik;
 	if (!P(fifo->mutex)) {
 		/* Lepiej powiedzieć, że pełna niż ryzykować. */
 		return -1;
 	}
-	wynik = fifo->liczba_zuzytych_miejsc ==
-		fifo->maksymalna_liczba_elementow;
+	fifo->liczba_zuzytych_miejsc == fifo->maksymalna_liczba_elementow ?
+		wynik = 1 : wynik = 0;
 	if (!V(fifo->mutex)) {
 		/* Tutaj właściwie już będzie pogrom, bo nic nie zrobimy. */
 		return -1;
@@ -162,6 +171,7 @@ int16_t top_FIFO(FIFO *const fifo)
 {
 	int16_t wynik;
 	if (!P(fifo->mutex)) {
+		errno
 		return -1;
 	}
 	if (fifo->liczba_zuzytych_miejsc == 0) {
@@ -191,4 +201,15 @@ int wyczysc_FIFO(FIFO *const fifo)
 		return -1;
 	}
 	return 0;
+}
+
+size_t liczba_zuzytych_bajtow(const FIFO *const fifo)
+{
+	size_t wynik;
+	if (!P(fifo->mutex))
+		return SIZE_MAX;
+	wynik = fifo->liczba_zuzytych_miejsc * sizeof(int16_t);
+	if (!V(fifo->mutex))
+		return SIZE_MAX;
+	return wynik;
 }
