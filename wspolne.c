@@ -1,10 +1,22 @@
 #include "wspolne.h"
+#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <errno.h>
+#include <event2/event.h>
+#include <assert.h>
+
+#ifndef NDEBUG
+static const bool DEBUG = true;
+#else
+static const bool DEBUG = false;
+#endif
 
 const char *const DOMYSLNY_NUMER_PORTU = "12534";
 
@@ -87,4 +99,66 @@ int zrob_gniazdo(const int typ, const char *const ludzki_adres)
 	if (jest_ipv6(ludzki_adres))
 		return socket(AF_INET6, typ, 0);
 	return socket(AF_INET, typ, 0);
+}
+
+void debug(const char *fmt, ...)
+{
+	va_list fmt_args;
+	if (!DEBUG)
+		return;
+	fprintf(stderr, "DEBUG: ");
+	va_start(fmt_args, fmt);
+	vfprintf(stderr, fmt, fmt_args);
+	va_end(fmt_args);
+	if (errno != 0) {
+		fprintf(stderr, "ERROR: (%d; %s)\n", errno, strerror(errno));
+	}
+}
+
+bool wyslij_numer_kliencki(int deskryptor, int32_t numer_kliencki)
+{
+	const size_t ROZMIAR_BUFORA = 30;
+	ssize_t dlugosc_danych;
+	char *bufor = malloc(ROZMIAR_BUFORA * sizeof(char));
+	sprintf(bufor, "CLIENT %"SCNd32"\n", numer_kliencki);
+	dlugosc_danych = strlen(bufor);
+	assert(bufor[dlugosc_danych] != '\0');
+	if (write(deskryptor, bufor, dlugosc_danych * sizeof(char)) !=
+	    dlugosc_danych) {
+		perror("Nie udało się wysłać numeru klienckiego.\n");
+		free(bufor);
+		return false;
+
+	}
+	free(bufor);
+	return true;
+}
+
+int32_t odbierz_numer_kliencki(int deskryptor)
+{
+	size_t max_rozmiar_wiadomosci_powitalnej = 30;
+	char *przyjmowane = malloc(sizeof(char) * max_rozmiar_wiadomosci_powitalnej);
+	const char *const MAX_NUMER_KLIENTA = "2147483647";
+	const char *const MIN_NUMER_KLIENTA = "0";
+	ssize_t tmp;
+	int i = -1;
+	do {
+		++i;
+		tmp = read(deskryptor, przyjmowane + i, 1);
+	} while (przyjmowane[i] != '\n' || tmp == 0);
+	if (tmp == 0)
+		return -1;
+	if (strcmp(przyjmowane, "CLIENT") != 0)
+		return -1;
+	przyjmowane[i] = '\0';
+	if (!jest_liczba_w_przedziale(MIN_NUMER_KLIENTA, MAX_NUMER_KLIENTA,
+				      przyjmowane + i))
+	    return -1;
+	return atoi(przyjmowane + i);
+}
+
+extern bool wyslij_tekst(int deskryptor, const char *const tekst)
+{
+	ssize_t ile_wyslac = strlen(tekst) * sizeof(char);
+	return (write(deskryptor, tekst, ile_wyslac) == ile_wyslac);
 }

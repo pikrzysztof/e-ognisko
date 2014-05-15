@@ -38,9 +38,9 @@
 
 CC           := gcc
 CDEBUGFLAGS  := -Wall -Wextra --pedantic -c -ggdb3 -D _DEBUG -O0
-LDDEBUGFLAGS := -Wall -Wextra --pedantic -ggdb3 -D _DEBUG -O0 -pthread
+LDDEBUGFLAGS := -Wall -Wextra --pedantic -ggdb3 -D _DEBUG -O0 -levent -pthread
 CRELEASEFLAGS:= -Wall -Wextra --pedantic -c -D NDEBUG -O2
-LDRELEASEFLAGS:= -Wall -Wextra --pedantic -D NDEBUG -O2 -pthread
+LDRELEASEFLAGS:= -Wall -Wextra --pedantic -D NDEBUG -O2 -levent -pthread
 SOURCES      := $(wildcard *.c)
 
 ifeq ($(debuglevel), 1)
