@@ -43,5 +43,7 @@ int main()
 	assert(!jest_liczba_w_przedziale("100", "200", "201"));
 	assert(!jest_liczba_w_przedziale("1", "111", "999"));
 	assert(!jest_liczba_w_przedziale("0", "10", "01"));
+	assert(!jest_liczba_w_przedziale("aaaaa", "zzzzz", "ccccc"));
+	assert(!jest_liczba_w_przedziale("aaaaa", "zzzzz", "cc"));
 	return EXIT_SUCCESS;
 }

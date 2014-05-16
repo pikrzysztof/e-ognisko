@@ -18,6 +18,9 @@ static const bool DEBUG = true;
 static const bool DEBUG = false;
 #endif
 
+/* Takim oto sposobem będzie zawsze różne od EOF i 0. */
+/* static ssize_t rozne_od(ssize_t, ssize_t); */
+const ssize_t BLAD_CZYTANIA = EOF + 1 == 0 ? EOF + 2 : EOF + 1;
 const char *const DOMYSLNY_NUMER_PORTU = "12534";
 
 static bool same_cyfry(const char *const liczba)
@@ -199,3 +202,44 @@ void konkatenacja(char *const pierwszy, const char *const drugi,
 	size_t poczatek = strlen(pierwszy);
 	memcpy(pierwszy + poczatek, drugi, dlugosc_drugiego);
 }
+
+ssize_t czytaj_do_konca_linii(const int deskryptor,
+			      char *const bufor,
+			      const ssize_t rozmiar_bufora)
+{
+	ssize_t ile_wczytano;
+	ssize_t i = -1;
+	do {
+		++i;
+		ile_wczytano = read(deskryptor, bufor + i, 1);
+
+	} while ((ile_wczytano == 1) && (i < rozmiar_bufora - 1)
+		 && (bufor[i] != '\n'));
+	if (ile_wczytano == -1)
+		return BLAD_CZYTANIA;
+	bufor[i + 1] = '\0';
+	if (ile_wczytano == 0)
+		return EOF;
+	return i;
+}
+
+int max(const int a, const int b)
+{
+	if (a > b)
+		return a;
+	return b;
+}
+
+int min(const int a, const int b)
+{
+	if (a > b)
+		return b;
+	return a;
+}
+
+/* static ssize_t rozne_od(const ssize_t jedno, const ssize_t drugie) */
+/* { */
+/* 	if (jedno + 1 == drugie) */
+/* 		return jedno + 2; */
+/* 	return jedno + 1; */
+/* } */

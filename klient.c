@@ -69,7 +69,7 @@ void wyczysc_i_poczekaj(evutil_socket_t *deskryptor,
 
 bool wyslij_keepalive(const int deskryptor)
 {
-	wyslij_tekst(deskryptor, "KEEPALIVE\n");
+	return wyslij_tekst(deskryptor, "KEEPALIVE\n");
 }
 
 bool popros_o_retransmisje(const int deskryptor, const int numer)
@@ -88,6 +88,8 @@ bool popros_o_retransmisje(const int deskryptor, const int numer)
 	return wynik;
 }
 
+/* Daje BLAD_CZYTANIA jak cos sie nie uda, EOF jak jest koniec pliku, */
+/* 0 jak sie uda. */
 int daj_dane_serwerowi(const int deskryptor,
 			const int numer_paczki, const size_t okno)
 {
@@ -95,32 +97,27 @@ int daj_dane_serwerowi(const int deskryptor,
 	size_t DLUGOSC_POCZATKU = strlen(POCZATEK_KOMUNIKATU) + 10;
 	char *const tekst = malloc(okno + DLUGOSC_POCZATKU);
 	ssize_t ile_przeczytane;
-	size_t gdzie_pisac;
 	if (tekst == NULL)
-		return false;
+		return BLAD_CZYTANIA;
 	if (sprintf(tekst, "%s%i\n", POCZATEK_KOMUNIKATU, numer_paczki) < 0) {
 		free(tekst);
-		return false;
+		return BLAD_CZYTANIA;
 	}
-	gdzie_pisac = strlen(tekst);
-	debug("TESKT DO WYSŁANIA SERWEROWI: %s"
-	      "KONIEC TEKSTU NIE DAWALEM PO NIM NICZEGO", tekst);
-	ile_przeczytane = read(STDIN_FILENO, tekst + gdzie_pisac + 1,
-			       okno);
-	if (ile_przeczytane < 0) {
-		perror("Nie udało się wczytać danych z STDIN.");
-		free(tekst);
-		return false;
-	}
-	/* if (DEBUG) */
-	/* 	if write(STDOUT_FILENO, tekst, min()) */
-	/* 	write(if) */
+	ile_przeczytane = read(deskryptor, tekst + strlen(tekst), okno);
 	if (ile_przeczytane < 0) {
 		free(tekst);
-		return false;
+		return BLAD_CZYTANIA;
 	}
-	/* wyslij_tekst(deskryptor, ) */
-
+	if (ile_przeczytane == 0) {
+		free(tekst);
+		return EOF;
+	}
+	if (wyslij_tekst(deskryptor, tekst)) {
+		free(tekst);
+		return 0;
+	}
+	free(tekst);
+	return BLAD_CZYTANIA;
 }
 
 int main(int argc, char **argv)
