@@ -20,24 +20,40 @@ static const bool DEBUG = false;
 
 const char *const DOMYSLNY_NUMER_PORTU = "12534";
 
+static bool same_cyfry(const char *const liczba)
+{
+	int i;
+	const int DLUGOSC = strlen(liczba);
+	for (i = 0; i < DLUGOSC; ++i)
+		if (liczba[i] < '0' || liczba[i] > '9')
+			return false;
+	return true;
+}
+
 bool jest_liczba_w_przedziale(const char *const poczatek,
-				     const char *const koniec,
-				     const char *const liczba)
+			      const char *const koniec,
+			      const char *const liczba)
 {
 	const int DLUGOSC_POCZATKU = strlen(poczatek);
 	const int DLUGOSC_KONCA = strlen(koniec);
 	const int DLUGOSC = strlen(liczba);
-        int i;
         if (DLUGOSC > DLUGOSC_KONCA || DLUGOSC < DLUGOSC_POCZATKU)
                 return false;
         if (liczba[0] == '0')
                 return (DLUGOSC == 1 && strcmp(poczatek, "0") == 0);
-        for (i = 0; i < DLUGOSC; i++)
-                if (liczba[i] < '0' || liczba[i] > '9')
-                        return false;
-        return ((strcmp(liczba, koniec) <= 0) &&
-		(strcmp(liczba, poczatek) >= 0));
+	if (!same_cyfry(liczba))
+		return false;
+	/* Z samych cyfr i ma posrednia dlugosc. */
+	if (DLUGOSC > DLUGOSC_POCZATKU && DLUGOSC < DLUGOSC_KONCA)
+		return true;
+	if (DLUGOSC == DLUGOSC_KONCA)
+		return (strcmp(liczba, koniec) <= 0);
+	if (DLUGOSC == DLUGOSC_POCZATKU)
+		return (strcmp(liczba, poczatek) >= 0);
+	/* Nigdy nie dojdzie do ponizszej linijki. */
+	return false;
 }
+
 
 
 bool wlasciwy_port(const char *const numer_portu)
@@ -110,6 +126,7 @@ void debug(const char *fmt, ...)
 	va_start(fmt_args, fmt);
 	vfprintf(stderr, fmt, fmt_args);
 	va_end(fmt_args);
+	fprintf(stderr, "\n");
 	if (errno != 0) {
 		fprintf(stderr, "ERROR: (%d; %s)\n", errno, strerror(errno));
 	}
@@ -157,8 +174,28 @@ int32_t odbierz_numer_kliencki(int deskryptor)
 	return atoi(przyjmowane + i);
 }
 
-extern bool wyslij_tekst(int deskryptor, const char *const tekst)
+bool wyslij_tekst(int deskryptor, const char *const tekst)
 {
 	ssize_t ile_wyslac = strlen(tekst) * sizeof(char);
 	return (write(deskryptor, tekst, ile_wyslac) == ile_wyslac);
+}
+
+ssize_t dopisz_na_koncu(char *const poczatek,
+			       const char *const fmt, ...)
+{
+	size_t dlugosc = strlen(poczatek);
+	va_list fmt_args;
+	ssize_t wynik;
+	va_start(fmt_args, fmt);
+	wynik = vsprintf(poczatek + dlugosc, fmt, fmt_args);
+	va_end(fmt_args);
+	return wynik;
+}
+
+
+void konkatenacja(char *const pierwszy, const char *const drugi,
+			   size_t dlugosc_drugiego)
+{
+	size_t poczatek = strlen(pierwszy);
+	memcpy(pierwszy + poczatek, drugi, dlugosc_drugiego);
 }

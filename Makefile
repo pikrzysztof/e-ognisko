@@ -78,3 +78,11 @@ clean:
 	-rm -f *.o $(ALL) $(ALLOBJECTS) $(DEPENDS) *~
 
 remake: clean all
+
+debug: $(DEPENDS) $(ALL)
+	make debuglevel=1
+
+tests:
+	rm -f test
+	make test debuglevel=1
+	./test

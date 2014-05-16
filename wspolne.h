@@ -55,6 +55,14 @@ extern bool jest_liczba_w_przedziale(const char *const poczatek,
 				     const char *const koniec,
 				     const char *const liczba);
 
+/* Dopisuje na koncu napisu to, co mu kazemy. */
+/* Wynik: ile bajtow wpisal lub -1 jesli blad. */
+extern ssize_t dopisz_na_koncu(char *const poczatek,
+			       const char *const fmt, ...);
 
+/* Dodaje drugi napis na koncu pierwszego, konczy drugi '\0' */
+/* Wynik: ile bajtow wpisal badz -1 jesli blad. */
+extern void konkatenacja(char *const pierwszy, const char *const drugi,
+			   size_t dlugosc_drugiego);
 
 #endif
