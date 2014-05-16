@@ -37,11 +37,14 @@
 # zywcem.
 
 CC           := gcc
-CDEBUGFLAGS  := -Wall -Wextra --pedantic -c -ggdb3 -D _DEBUG -O0
-LDDEBUGFLAGS := -Wall -Wextra --pedantic -ggdb3 -D _DEBUG -O0 -levent -pthread
-CRELEASEFLAGS:= -Wall -Wextra --pedantic -c -D NDEBUG -O2
-LDRELEASEFLAGS:= -Wall -Wextra --pedantic -D NDEBUG -O2 -levent -pthread
+CDEBUGFLAGS  := -ggdb3 -D _DEBUG -O0
+LDDEBUGFLAGS := -ggdb3 -D _DEBUG -O0
+CRELEASEFLAGS:= -D NDEBUG -O2
+LDRELEASEFLAGS:= -D NDEBUG -O2
 SOURCES      := $(wildcard *.c)
+COMMONLDFLAGS := -levent -pthread
+COMMONCFLAGS := -c
+COMMONFLAGS := -Wall -Wextra -pedantic -std=c99 -Wuseless-cast -Wzero-as-null-pointer-constant -Wcast-align -Wcast-qual -Wformat=2 -Winit-self -Wlogical-op -Wmissing-include-dirs -Wredundant-decls -Wshadow -Wsign-conversion -Wswitch-default -Wundef
 
 ifeq ($(debuglevel), 1)
     LDFLAGS = $(LDDEBUGFLAGS)
@@ -63,14 +66,14 @@ ALLOBJECTS  := $(subst .c,.o,$(SOURCES))
 OBJECTS	    := $(filter-out $(MAINOBJECTS),$(ALLOBJECTS))
 # pliki obiektowe, ktore nie zawieraja definicji main
 
-all: $(DEPENDS) $(ALL)
+all: $(DEPENDS) $(ALL) Makefile
 
 $(DEPENDS) : %.d : %.c				# tworzenie submakefiles
-	$(CC) -MM $< > $@			# 	- zaleznosc
-	@echo -e: "\t"$(CC) $(CFLAGS) $< >> $@	#	- polecenie kompilacji
+	@$(CC) -MM $< > $@			# 	- zaleznosc
+	@echo -e: "\t"$(CC) $(CFLAGS) $(COMMONCFLAGS) $(COMMONFLAGS) $< >> $@	#	- polecenie kompilacji
 
 $(ALL) : % : %.o $(OBJECTS)			# konsolidacja
-	$(CC) $(LDFLAGS) -o $@ $^
+	@$(CC) $(LDFLAGS) $(COMMONLDFLAGS) $(COMMONFLAGS) -o $@ $^
 
 -include $(DEPENDS)				# dolaczenie submakefiles
 

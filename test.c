@@ -28,12 +28,10 @@ int main()
 	assert(safe_add(INT16_MAX, 1) == INT16_MAX);
 	assert(safe_add(INT16_MAX, INT16_MIN) == -1);
 	assert(safe_add(INT16_MIN, -1) == INT16_MIN);
-	printf("Przed konkatenacja napis 1:\n%s.\nnapis 2:\n%s.\n",
-	       napis, napis2);
 	konkatenacja(napis, napis2, strlen(napis2));
-	printf("Po konkatenacji napis1:\n%s.\n", napis);
+	assert(strcmp(napis, "01234 yyyy") == 0);
 	dopisz_na_koncu(napis, "dopisane: %i", 5);
-	printf("Dopisałem do napis1 na końcu \"dopisane: 5\n%s.\n", napis);
+	assert(strcmp(napis, "01234 yyyydopisane: 5") == 0);
 	assert(!jest_liczba_w_przedziale("0", "5", "10"));
 	assert(jest_liczba_w_przedziale("0", "10", "5"));
 	assert(jest_liczba_w_przedziale("50", "200", "100"));
@@ -45,5 +43,6 @@ int main()
 	assert(!jest_liczba_w_przedziale("0", "10", "01"));
 	assert(!jest_liczba_w_przedziale("aaaaa", "zzzzz", "ccccc"));
 	assert(!jest_liczba_w_przedziale("aaaaa", "zzzzz", "cc"));
+	printf("Przeszło wszystkie testy!\n");
 	return EXIT_SUCCESS;
 }

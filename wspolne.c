@@ -236,10 +236,3 @@ int min(const int a, const int b)
 		return b;
 	return a;
 }
-
-/* static ssize_t rozne_od(const ssize_t jedno, const ssize_t drugie) */
-/* { */
-/* 	if (jedno + 1 == drugie) */
-/* 		return jedno + 2; */
-/* 	return jedno + 1; */
-/* } */

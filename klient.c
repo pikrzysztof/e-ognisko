@@ -194,6 +194,10 @@ int main(int argc, char **argv)
 				&adres_binarny_serwera, &baza_zdarzen);
 			continue;
 		}
+		freeaddrinfo(adres_binarny_serwera);
+		adres_binarny_serwera = podaj_adres_binarny(adres_serwera,
+							    port, IPPROTO_UDP,
+							    SOCK_DGRAM);
 		deskryptor_udp = zrob_gniazdo(SOCK_DGRAM, adres_serwera);
 		if (deskryptor_udp == -1) {
 			perror("Nie udało się zrobić deskryptora UDP.\n");
