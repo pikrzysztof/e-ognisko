@@ -13,6 +13,9 @@
 
 const char* const DOMYSLNY_NUMER_PORTU;
 const ssize_t BLAD_CZYTANIA;
+
+bool ustaw_gniazdo_nieblokujace(const int gniazdo);
+
 /* Działa tylko na liczbach dodatnich. */
 extern bool jest_liczba_w_przedziale(const char *const poczatek,
 				     const char *const koniec,

@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <event2/event.h>
 #include <assert.h>
+#include <fcntl.h>
 
 #ifndef NDEBUG
 static const bool DEBUG = true;
@@ -19,9 +20,16 @@ static const bool DEBUG = false;
 #endif
 
 /* Takim oto sposobem będzie zawsze różne od EOF i 0. */
-/* static ssize_t rozne_od(ssize_t, ssize_t); */
-const ssize_t BLAD_CZYTANIA = EOF + 1 == 0 ? EOF + 2 : EOF + 1;
+const ssize_t BLAD_CZYTANIA = EOF + 1 >= 0 ? -5 : EOF + 1;
 const char *const DOMYSLNY_NUMER_PORTU = "12534";
+
+bool ustaw_gniazdo_nieblokujace(const int gniazdo)
+{
+	int biezace_flagi = fcntl(gniazdo, F_GETFL, 0);
+	if (biezace_flagi == -1)
+		return false;
+	return (fcntl(gniazdo, F_SETFL, biezace_flagi | O_NONBLOCK) != -1);
+}
 
 static bool same_cyfry(const char *const liczba)
 {
@@ -68,8 +76,8 @@ bool wlasciwy_port(const char *const numer_portu)
 }
 
 const char* daj_opcje(const char *const nazwa_opcji,
-			    const int rozmiar_tablicy_opcji,
-			    char *const *const tablica_opcji)
+		      const int rozmiar_tablicy_opcji,
+		      char *const *const tablica_opcji)
 {
 	int i;
 	for (i = 0; i < rozmiar_tablicy_opcji - 1; ++i) {
@@ -142,13 +150,12 @@ bool wyslij_numer_kliencki(int deskryptor, int32_t numer_kliencki)
 	char *bufor = malloc(ROZMIAR_BUFORA * sizeof(char));
 	sprintf(bufor, "CLIENT %"SCNd32"\n", numer_kliencki);
 	dlugosc_danych = strlen(bufor);
-	assert(bufor[dlugosc_danych] != '\0');
+	assert(bufor[dlugosc_danych] == '\0');
 	if (write(deskryptor, bufor, dlugosc_danych * sizeof(char)) !=
 	    dlugosc_danych) {
 		perror("Nie udało się wysłać numeru klienckiego.\n");
 		free(bufor);
 		return false;
-
 	}
 	free(bufor);
 	return true;
@@ -160,21 +167,28 @@ int32_t odbierz_numer_kliencki(int deskryptor)
 	char *przyjmowane = malloc(sizeof(char) * max_rozmiar_wiadomosci_powitalnej);
 	const char *const MAX_NUMER_KLIENTA = "2147483647";
 	const char *const MIN_NUMER_KLIENTA = "0";
-	ssize_t tmp;
-	int i = -1;
-	do {
-		++i;
-		tmp = read(deskryptor, przyjmowane + i, 1);
-	} while (przyjmowane[i] != '\n' || tmp == 0);
-	if (tmp == 0)
+	const size_t MIN_DLUGOSC_WIADOMOSCI = 9;
+	const size_t POCZATEK_NUMERU = 7;
+	int32_t wynik;
+	ssize_t ile_przeczytane =
+		czytaj_do_konca_linii(deskryptor, przyjmowane,
+				      max_rozmiar_wiadomosci_powitalnej);
+	if (ile_przeczytane < MIN_DLUGOSC_WIADOMOSCI) {
+		free(przyjmowane);
+		perror("Jakiś dziwny numer kliencki.");
 		return -1;
-	if (strcmp(przyjmowane, "CLIENT") != 0)
-		return -1;
-	przyjmowane[i] = '\0';
+	}
+	/* Usuwamy nowa linie, zeby moc sprawdzicz, czy to numer kliencki. */
+	przyjmowane[ile_przeczytane - 1] = '\0';
 	if (!jest_liczba_w_przedziale(MIN_NUMER_KLIENTA, MAX_NUMER_KLIENTA,
-				      przyjmowane + i))
-	    return -1;
-	return atoi(przyjmowane + i);
+				      przyjmowane + POCZATEK_NUMERU)) {
+		free(przyjmowane);
+		perror("Jakiś dziwny numer kliencki!");
+		return -1;
+	}
+	wynik = atoi(przyjmowane + POCZATEK_NUMERU);
+	free(przyjmowane);
+	return wynik;
 }
 
 bool wyslij_tekst(int deskryptor, const char *const tekst)
@@ -184,7 +198,7 @@ bool wyslij_tekst(int deskryptor, const char *const tekst)
 }
 
 ssize_t dopisz_na_koncu(char *const poczatek,
-			       const char *const fmt, ...)
+			const char *const fmt, ...)
 {
 	size_t dlugosc = strlen(poczatek);
 	va_list fmt_args;
@@ -197,7 +211,7 @@ ssize_t dopisz_na_koncu(char *const poczatek,
 
 
 void konkatenacja(char *const pierwszy, const char *const drugi,
-			   size_t dlugosc_drugiego)
+		  size_t dlugosc_drugiego)
 {
 	size_t poczatek = strlen(pierwszy);
 	memcpy(pierwszy + poczatek, drugi, dlugosc_drugiego);
@@ -213,7 +227,7 @@ ssize_t czytaj_do_konca_linii(const int deskryptor,
 		++i;
 		ile_wczytano = read(deskryptor, bufor + i, 1);
 
-	} while ((ile_wczytano == 1) && (i < rozmiar_bufora - 1)
+	} while ((ile_wczytano == 1) && (i < rozmiar_bufora - 2)
 		 && (bufor[i] != '\n'));
 	if (ile_wczytano == -1)
 		return BLAD_CZYTANIA;

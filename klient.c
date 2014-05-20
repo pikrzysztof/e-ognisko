@@ -4,19 +4,12 @@
 /* numer albumu 332534 */
 /* W projekcie zostały wykorzystane fragmenty kodu z zajęć. */
 /* kodowanie UTF-8 */
-#include <sys/socket.h>
-#include <netdb.h>
 #include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
 #include "err.h"
 #include "wspolne.h"
 #include <event2/event.h>
-#include <event2/util.h>
 
 #ifndef NDEBUG
 static const bool DEBUG = true;
@@ -24,52 +17,43 @@ static const bool DEBUG = true;
 static const bool DEBUG = false;
 #endif
 
-extern const char *const DOMYSLNY_NUMER_PORTU;
+bool blad;
 
 void zle_uzywane(const char *const nazwa_programu)
 {
 	fatal("Program uruchamia się %s -s nazwa_serwera", nazwa_programu);
 }
 
-typedef struct {
-	int sockfd;
-	int family;
-} arg_keepalive;
-
-
-
-
-
-void wyczysc_i_poczekaj(evutil_socket_t *deskryptor,
-			evutil_socket_t *deskryptor_2,
-			struct addrinfo **adres_binarny_serwera,
-			struct event_base **baza_zdarzen)
+void wyczysc(evutil_socket_t *deskryptor,
+	     evutil_socket_t *deskryptor_2,
+	     struct event_base *baza_zdarzen,
+	     struct event* wydarzenie)
 {
-	const useconds_t ile_czekac = 500000;
-	if (*deskryptor != -1) {
+	if (deskryptor != NULL) {
 		if (close(*deskryptor) != 0)
-			perror("Nie udało się zamknąć deskryptora.\n");
-		*deskryptor = -1;
+			perror("Nie udało się zamknąć deskryptora.");
 	}
-	if (*deskryptor_2 != -1) {
+	if (deskryptor_2 != NULL) {
 		if (close(*deskryptor_2) != 0)
-			perror("Nie udało się zamknąć deskryptora.\n");
-		*deskryptor_2  = -1;
+			perror("Nie udało się zamknąć deskryptora.");
 	}
-	if (*adres_binarny_serwera != NULL) {
-		freeaddrinfo(*adres_binarny_serwera);
-		*adres_binarny_serwera = NULL;
+	if (wydarzenie != NULL) {
+		if (event_del(wydarzenie) != 0)
+			perror("Nie udało się wykasować wydarzenia.");
 	}
-	if (*baza_zdarzen != NULL) {
-		event_base_free(*baza_zdarzen);
-		*baza_zdarzen = NULL;
+	if (baza_zdarzen != NULL) {
+		event_base_free(baza_zdarzen);
 	}
-	usleep(ile_czekac);
 }
 
-bool wyslij_keepalive(const int deskryptor)
+void wyslij_keepalive(evutil_socket_t minus_jeden, short flagi,
+		      void *deskryptor)
 {
-	return wyslij_tekst(deskryptor, "KEEPALIVE\n");
+	const int arg = *((int *) deskryptor);
+	if (!wyslij_tekst(arg, "KEEPALIVE\n")) {
+		perror("Nie udalo sie wyspac KEEPALIVE.");
+		blad = true;
+	}
 }
 
 bool popros_o_retransmisje(const int deskryptor, const int numer)
@@ -120,105 +104,114 @@ int daj_dane_serwerowi(const int deskryptor,
 	return BLAD_CZYTANIA;
 }
 
+evutil_socket_t ustanow_polaczenie(const int protokol,
+				   const char* const adres_serwera,
+				   const char* const port)
+{
+	const int typ_gniazda = protokol == IPPROTO_TCP ?
+                                            SOCK_STREAM : SOCK_DGRAM;
+	const evutil_socket_t gniazdo = zrob_gniazdo(typ_gniazda,
+						     adres_serwera);
+	struct addrinfo* adres_binarny_serwera = NULL;
+	if (gniazdo == -1)
+		return gniazdo;
+	adres_binarny_serwera = podaj_adres_binarny(adres_serwera,
+						    port, protokol,
+						    typ_gniazda);
+	if (adres_binarny_serwera == NULL) {
+		perror("Nie można pobrać adresu serwera!");
+		if (close(gniazdo) < 0)
+			perror("Nie można zamknąć gniazda!");
+		return -1;
+	}
+	if (connect(gniazdo, adres_binarny_serwera->ai_addr,
+		    adres_binarny_serwera->ai_addrlen) < 0) {
+		perror("Nie można podłączyć się do serwera");
+		freeaddrinfo(adres_binarny_serwera);
+		if (close(gniazdo) < 0)
+			perror("Nie można zamknąć gniazda.");
+		return -1;
+	}
+	freeaddrinfo(adres_binarny_serwera);
+}
+
+void dzialaj(const char* const adres_serwera, const char* const port)
+{
+	struct event* wysylanie_keepalive;
+	struct event_base *baza_zdarzen = NULL;
+	evutil_socket_t deskryptor_tcp = -1;
+	evutil_socket_t deskryptor_udp = -1;
+	int32_t moj_numer_kliencki;
+	struct timeval dziesiec_setnych = {0, 100000};
+	debug("ustawiamy gniazda na nieblokujace");
+	if (!ustaw_gniazdo_nieblokujace(STDIN_FILENO) ||
+	    !ustaw_gniazdo_nieblokujace(STDOUT_FILENO)) {
+		perror("Nie mozna ustawic STDIN/STDOUT na nieblokujace.");
+		return;
+	}
+	debug("ustawilismy gniazda na nieblokujace");
+	deskryptor_tcp = ustanow_polaczenie(IPPROTO_TCP, adres_serwera, port);
+	if (deskryptor_tcp == -1) {
+		perror("Nie można ustanowić połączenia TCP.");
+		return;
+	}
+	moj_numer_kliencki = odbierz_numer_kliencki(deskryptor_tcp);
+	if (moj_numer_kliencki == -1) {
+		perror("Serwer wysłał jakiś dziwny numer kliencki.");
+		wyczysc(&deskryptor_tcp, NULL, NULL, NULL);
+		return;
+	}
+	deskryptor_udp = ustanow_polaczenie(IPPROTO_UDP, adres_serwera, port);
+	if (deskryptor_udp == -1) {
+		perror("Nie można ustanowić połączenia UDP.");
+		wyczysc(&deskryptor_tcp, NULL, NULL, NULL);
+		return;
+	}
+	if (!wyslij_numer_kliencki(deskryptor_udp, moj_numer_kliencki)) {
+		perror("Nie udało się zgłosić.\n");
+		wyczysc(&deskryptor_tcp, &deskryptor_udp, NULL, NULL);
+		return;
+	}
+	baza_zdarzen = event_base_new();
+	if (baza_zdarzen == NULL) {
+		wyczysc(&deskryptor_tcp, &deskryptor_udp, NULL, NULL);
+		return;
+	}
+	wysylanie_keepalive = event_new(baza_zdarzen, -1, EV_PERSIST,
+					wyslij_keepalive, &deskryptor_udp);
+	if (event_add(wysylanie_keepalive, &dziesiec_setnych) != 0) {
+		wyczysc(&deskryptor_tcp, &deskryptor_udp, baza_zdarzen,
+			wysylanie_keepalive);
+		return;
+	}
+	debug("Pętla obsługi zdarzeń!");
+	if (event_base_dispatch(baza_zdarzen) == -1) {
+		perror("Nie udało się uruchomić pętli obsługi zdarzeń.");
+		wyczysc(&deskryptor_tcp, &deskryptor_udp, baza_zdarzen,
+			wysylanie_keepalive);
+		return;
+	}
+	debug("Wychodzimy z pętli obsługi zdarzeń.");
+}
+
 int main(int argc, char **argv)
 {
 	const char* const OZNACZENIE_PARAMETRU_ADRESU = "-s";
 	const char* const OZNACZENIE_PARAMETRU_PORTU = "-p";
 	const char *adres_serwera = NULL;
 	const char *port = NULL;
-	struct addrinfo* adres_binarny_serwera = NULL;
-	struct event_base *baza_zdarzen = NULL;
-	evutil_socket_t deskryptor_tcp = -1;
-	evutil_socket_t deskryptor_udp = -1;
-	int32_t moj_numer_kliencki;
-	int wstepne_flagi_stdin, wstepne_flagi_stdout;
-
-
+	const useconds_t ILE_SPAC = 500000;
 	if (argc < 3)
 		zle_uzywane(argv[0]);
-	/* Nawiąż połaczenie TCP z serwerem. */
 	adres_serwera = daj_opcje(OZNACZENIE_PARAMETRU_ADRESU, argc, argv);
 	port = daj_opcje(OZNACZENIE_PARAMETRU_PORTU, argc, argv);
 	if (adres_serwera == NULL)
 		fatal("Podaj adres serwera.\n");
 	if (port == NULL)
 		port = DOMYSLNY_NUMER_PORTU;
-
 	while (true) {
-		wstepne_flagi_stdin = fcntl(STDIN_FILENO, F_GETFL, 0);
-		wstepne_flagi_stdout = fcntl(STDOUT_FILENO, F_GETFL, 0);
-		if (wstepne_flagi_stdin == -1 || wstepne_flagi_stdout == -1)
-			continue;
-		if (fcntl(STDIN_FILENO, F_SETFL,
-			  wstepne_flagi_stdin | O_NONBLOCK) == -1) {
-			perror("Nie można ustawić flag wczytywania.");
-			continue;
-		}
-		if (fcntl(STDOUT_FILENO, F_SETFL,
-			  wstepne_flagi_stdout | O_NONBLOCK) == -1) {
-			perror("Nie można ustawić flag wypisywania.");
-			continue;
-		}
-		baza_zdarzen = event_base_new();
-		if (baza_zdarzen == NULL)
-			continue;
-		deskryptor_tcp = zrob_gniazdo(SOCK_STREAM, adres_serwera);
-		if (deskryptor_tcp == -1) {
-			perror("Nie można stworzyć gniazda do komunikacji TCP."
-			       "\n");
-			wyczysc_i_poczekaj(&deskryptor_tcp, &deskryptor_udp,
-				&adres_binarny_serwera, &baza_zdarzen);
-			continue;
-		}
-		adres_binarny_serwera = podaj_adres_binarny(adres_serwera,
-							    port, IPPROTO_TCP,
-							    SOCK_STREAM);
-		if (adres_binarny_serwera == NULL) {
-			perror("Nie można podać adresu binarnego serwera.\n");
-			wyczysc_i_poczekaj(&deskryptor_tcp, &deskryptor_udp,
-				&adres_binarny_serwera, &baza_zdarzen);
-			continue;
-		}
-		if (connect(deskryptor_tcp, adres_binarny_serwera->ai_addr,
-			    adres_binarny_serwera->ai_addrlen) < 0) {
-			syserr("Nie można nawiązać połączenia TCP z serwerem."
-			       "\n");
-			wyczysc_i_poczekaj(&deskryptor_tcp, &deskryptor_udp,
-				&adres_binarny_serwera, &baza_zdarzen);
-			continue;
-		}
-		moj_numer_kliencki = odbierz_numer_kliencki(deskryptor_tcp);
-		if (moj_numer_kliencki == -1) {
-			perror("Serwer wysłał jakiś dziwny numer kliencki.\n");
-			wyczysc_i_poczekaj(&deskryptor_tcp, &deskryptor_udp,
-				&adres_binarny_serwera, &baza_zdarzen);
-			continue;
-		}
-		freeaddrinfo(adres_binarny_serwera);
-		adres_binarny_serwera = podaj_adres_binarny(adres_serwera,
-							    port, IPPROTO_UDP,
-							    SOCK_DGRAM);
-		deskryptor_udp = zrob_gniazdo(SOCK_DGRAM, adres_serwera);
-		if (deskryptor_udp == -1) {
-			perror("Nie udało się zrobić deskryptora UDP.\n");
-			wyczysc_i_poczekaj(&deskryptor_tcp, &deskryptor_udp,
-				&adres_binarny_serwera, &baza_zdarzen);
-			continue;
-		}
-		if (connect(deskryptor_udp, adres_binarny_serwera->ai_addr,
-			    adres_binarny_serwera->ai_addrlen) < 0) {
-			perror("Nie udało się połączyć po UDP.\n");
-			wyczysc_i_poczekaj(&deskryptor_tcp, &deskryptor_udp,
-				&adres_binarny_serwera, &baza_zdarzen);
-			continue;
-		}
-		if (!wyslij_numer_kliencki(deskryptor_udp, moj_numer_kliencki)) {
-			perror("Nie udało się zgłosić.\n");
-			wyczysc_i_poczekaj(&deskryptor_tcp, &deskryptor_udp,
-				&adres_binarny_serwera, &baza_zdarzen);
-			continue;
-		}
-
+		dzialaj(adres_serwera, port);
+		usleep(ILE_SPAC);
 	}
 	return EXIT_SUCCESS;
 }
