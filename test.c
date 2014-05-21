@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 
 int main()
 {
@@ -44,5 +45,13 @@ int main()
 	assert(!jest_liczba_w_przedziale("aaaaa", "zzzzz", "ccccc"));
 	assert(!jest_liczba_w_przedziale("aaaaa", "zzzzz", "cc"));
 	printf("Przeszło wszystkie testy!\n");
+	free(napis);
+	fprintf(stderr, "wczytalismy %i\n", czytaj_do_vectora(STDIN_FILENO, &napis));
+	fprintf(stderr, "wczytalismy:\n%s.\n", napis);
+	free(napis);
+	napis = malloc(50 * sizeof(char));
+	fprintf(stderr, "wczytalismy %i\n", czytaj_do_konca_linii(STDIN_FILENO, napis, 50));
+	fprintf(stderr, "wczytalismy:\n%s.\n", napis);
+	free(napis);
 	return EXIT_SUCCESS;
 }

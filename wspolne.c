@@ -214,7 +214,7 @@ void konkatenacja(char *const pierwszy, const char *const drugi,
 		  size_t dlugosc_drugiego)
 {
 	size_t poczatek = strlen(pierwszy);
-	memcpy(pierwszy + poczatek, drugi, dlugosc_drugiego);
+	memcpy(pierwszy + poczatek, drugi, dlugosc_drugiego + 1);
 }
 
 ssize_t czytaj_do_konca_linii(const int deskryptor,
@@ -234,7 +234,7 @@ ssize_t czytaj_do_konca_linii(const int deskryptor,
 	bufor[i + 1] = '\0';
 	if (ile_wczytano == 0)
 		return EOF;
-	return i;
+	return i + 1;
 }
 
 ssize_t czytaj_do_vectora(const int deskryptor, char **wynik)
@@ -243,10 +243,13 @@ ssize_t czytaj_do_vectora(const int deskryptor, char **wynik)
 	const size_t MNOZNIK = 2;
 	size_t dlugosc_bufora = 4;
 	*wynik = malloc(dlugosc_bufora);
+	i = -1;
 	do {
 		++i;
-		if (dlugosc_bufora <= i + 2)
-			*wynik = realloc(wynik, dlugosc_bufora *= MNOZNIK);
+		if (dlugosc_bufora <= i + 2) {
+			dlugosc_bufora *= MNOZNIK;
+			*wynik = realloc(*wynik, dlugosc_bufora);
+		}
 		ile_wczytano = read(deskryptor, (*wynik) + i, 1);
 	} while ((ile_wczytano == 1) && ((*wynik)[i] != '\n'));
 	if (ile_wczytano == -1) {
@@ -257,7 +260,7 @@ ssize_t czytaj_do_vectora(const int deskryptor, char **wynik)
 	if (ile_wczytano == 0)
 		return EOF;
 	(*wynik)[i + 1] = '\0';
-	return i;
+	return i + 1;
 }
 
 int max(const int a, const int b)

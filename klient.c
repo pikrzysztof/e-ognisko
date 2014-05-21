@@ -17,8 +17,6 @@ static const bool DEBUG = true;
 static const bool DEBUG = false;
 #endif
 
-bool blad;
-
 void zle_uzywane(const char *const nazwa_programu)
 {
 	fatal("Program uruchamia się %s -s nazwa_serwera", nazwa_programu);
@@ -53,14 +51,30 @@ void wyczysc(evutil_socket_t *deskryptor,
 void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 			 void *baza_zdarzen)
 {
-	debug("Funkcja %s jeszcze nie zaimplementowana.", __func__);
-
+	if (flagi & EV_TIMEOUT) {
+		debug("Długo nie otrzymaliśmy połaczenia TCP.");
+		if (event_base_loopbreak((struct event_base *) baza_zdarzen)
+		    != 0) {
+			perror("Nie udało się wyskoczyć z pętli.");
+		}
+	}
+	debug("Czytamy z TCP!");
+	if (false)
+		if (event_base_loopbreak((struct event_base *) baza_zdarzen)
+		    != 0) {
+			perror("Nie udało się wyskoczyć z pętli.");
+		}
 }
 
 void czytaj_i_reaguj_udp(evutil_socket_t gniazdo_udp, short flagi,
 			 void *baza_zdarzen)
 {
 	debug("Funkcja %s jeszcze nie zaimplementowana.", __func__);
+	if (false)
+		if (event_base_loopbreak((struct event_base *) baza_zdarzen)
+		    != 0) {
+			perror("Nie udało się wyskoczyć z pętli.");
+		}
 }
 
 void wyslij_keepalive(evutil_socket_t minus_jeden, short flagi,
@@ -69,7 +83,6 @@ void wyslij_keepalive(evutil_socket_t minus_jeden, short flagi,
 	const int arg = *((int *) deskryptor);
 	if (!wyslij_tekst(arg, "KEEPALIVE\n")) {
 		perror("Nie udalo sie wyspac KEEPALIVE.");
-		blad = true;
 	}
 }
 
@@ -130,6 +143,7 @@ evutil_socket_t ustanow_polaczenie(const int protokol,
 	const evutil_socket_t gniazdo = zrob_gniazdo(typ_gniazda,
 						     adres_serwera);
 	struct addrinfo* adres_binarny_serwera = NULL;
+	int set = 1;
 	if (gniazdo == -1)
 		return gniazdo;
 	adres_binarny_serwera = podaj_adres_binarny(adres_serwera,
@@ -150,6 +164,7 @@ evutil_socket_t ustanow_polaczenie(const int protokol,
 		return -1;
 	}
 	freeaddrinfo(adres_binarny_serwera);
+	return gniazdo;
 }
 
 void dzialaj(const char* const adres_serwera, const char* const port)
