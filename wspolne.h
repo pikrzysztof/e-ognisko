@@ -76,4 +76,6 @@ extern int max(const int a, const int b);
 
 extern int min(const int a, const int b);
 
+extern ssize_t czytaj_do_vectora(const int deskryptor, char **wynik);
+
 #endif

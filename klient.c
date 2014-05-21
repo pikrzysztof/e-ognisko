@@ -10,7 +10,7 @@
 #include "err.h"
 #include "wspolne.h"
 #include <event2/event.h>
-
+#include <stdarg.h>
 #ifndef NDEBUG
 static const bool DEBUG = true;
 #else
@@ -24,11 +24,14 @@ void zle_uzywane(const char *const nazwa_programu)
 	fatal("Program uruchamia się %s -s nazwa_serwera", nazwa_programu);
 }
 
+/* Pod ... sa struct event* */
 void wyczysc(evutil_socket_t *deskryptor,
 	     evutil_socket_t *deskryptor_2,
 	     struct event_base *baza_zdarzen,
-	     struct event* wydarzenie)
+	     unsigned int liczba_wydarzen, ...)
 {
+	va_list wydarzenia;
+	unsigned int i;
 	if (deskryptor != NULL) {
 		if (close(*deskryptor) != 0)
 			perror("Nie udało się zamknąć deskryptora.");
@@ -37,13 +40,27 @@ void wyczysc(evutil_socket_t *deskryptor,
 		if (close(*deskryptor_2) != 0)
 			perror("Nie udało się zamknąć deskryptora.");
 	}
-	if (wydarzenie != NULL) {
-		if (event_del(wydarzenie) != 0)
-			perror("Nie udało się wykasować wydarzenia.");
+	va_start(wydarzenia, liczba_wydarzen);
+	for (i = 0; i < liczba_wydarzen; ++i) {
+		event_free(va_arg(wydarzenia, struct event *));
 	}
+	va_end(wydarzenia);
 	if (baza_zdarzen != NULL) {
 		event_base_free(baza_zdarzen);
 	}
+}
+
+void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
+			 void *baza_zdarzen)
+{
+	debug("Funkcja %s jeszcze nie zaimplementowana.", __func__);
+
+}
+
+void czytaj_i_reaguj_udp(evutil_socket_t gniazdo_udp, short flagi,
+			 void *baza_zdarzen)
+{
+	debug("Funkcja %s jeszcze nie zaimplementowana.", __func__);
 }
 
 void wyslij_keepalive(evutil_socket_t minus_jeden, short flagi,
@@ -138,6 +155,8 @@ evutil_socket_t ustanow_polaczenie(const int protokol,
 void dzialaj(const char* const adres_serwera, const char* const port)
 {
 	struct event* wysylanie_keepalive;
+	struct event* wiadomosc_na_tcp = NULL;
+	struct event* wiadomosc_na_udp = NULL;
 	struct event_base *baza_zdarzen = NULL;
 	evutil_socket_t deskryptor_tcp = -1;
 	evutil_socket_t deskryptor_udp = -1;
@@ -158,39 +177,77 @@ void dzialaj(const char* const adres_serwera, const char* const port)
 	moj_numer_kliencki = odbierz_numer_kliencki(deskryptor_tcp);
 	if (moj_numer_kliencki == -1) {
 		perror("Serwer wysłał jakiś dziwny numer kliencki.");
-		wyczysc(&deskryptor_tcp, NULL, NULL, NULL);
+		wyczysc(&deskryptor_tcp, NULL, NULL, 0);
 		return;
 	}
 	deskryptor_udp = ustanow_polaczenie(IPPROTO_UDP, adres_serwera, port);
 	if (deskryptor_udp == -1) {
 		perror("Nie można ustanowić połączenia UDP.");
-		wyczysc(&deskryptor_tcp, NULL, NULL, NULL);
+		wyczysc(&deskryptor_tcp, NULL, NULL, 0);
 		return;
 	}
 	if (!wyslij_numer_kliencki(deskryptor_udp, moj_numer_kliencki)) {
 		perror("Nie udało się zgłosić.\n");
-		wyczysc(&deskryptor_tcp, &deskryptor_udp, NULL, NULL);
+		wyczysc(&deskryptor_tcp, &deskryptor_udp, NULL, 0);
+		return;
+	}
+	if (!ustaw_gniazdo_nieblokujace(deskryptor_tcp) ||
+	    !ustaw_gniazdo_nieblokujace(deskryptor_udp)) {
+		perror("Nie udało się ustawić gniazda nieblokującego.");
+		wyczysc(&deskryptor_tcp, &deskryptor_udp, NULL, 0);
 		return;
 	}
 	baza_zdarzen = event_base_new();
 	if (baza_zdarzen == NULL) {
-		wyczysc(&deskryptor_tcp, &deskryptor_udp, NULL, NULL);
+		perror("Nie można zrobić bazy zdarzeń.");
+		wyczysc(&deskryptor_tcp, &deskryptor_udp, NULL, 0);
 		return;
 	}
 	wysylanie_keepalive = event_new(baza_zdarzen, -1, EV_PERSIST,
 					wyslij_keepalive, &deskryptor_udp);
 	if (event_add(wysylanie_keepalive, &dziesiec_setnych) != 0) {
+		perror("Nie da się ustawić wysyłania KEEPALIVE.");
 		wyczysc(&deskryptor_tcp, &deskryptor_udp, baza_zdarzen,
-			wysylanie_keepalive);
+			1, wysylanie_keepalive);
+		return;
+	}
+	wiadomosc_na_udp = event_new(baza_zdarzen, deskryptor_udp,
+				     EV_PERSIST | EV_READ, czytaj_i_reaguj_udp,
+				     &baza_zdarzen);
+	wiadomosc_na_tcp = event_new(baza_zdarzen, deskryptor_tcp,
+				     EV_PERSIST | EV_READ, czytaj_i_reaguj_tcp,
+				     &baza_zdarzen);
+	if (wiadomosc_na_tcp == NULL || wiadomosc_na_udp == NULL) {
+		perror("Nie da się utworzyc wydarzenia z czytaniem.");
+		wyczysc(&deskryptor_tcp, &deskryptor_udp, baza_zdarzen,
+			3, wysylanie_keepalive, wiadomosc_na_tcp,
+			wiadomosc_na_udp);
+		return;
+	}
+	if (event_add(wiadomosc_na_tcp, NULL) != 0) {
+		perror("Nie da się wrzucić czytania TCP.");
+		wyczysc(&deskryptor_tcp, &deskryptor_udp, baza_zdarzen,
+			4, wysylanie_keepalive, wiadomosc_na_tcp,
+			wiadomosc_na_udp);
+		return;
+	}
+	if (event_add(wiadomosc_na_udp, NULL) != 0) {
+		perror("Nie da się wrzucić czytania TCP.");
+		wyczysc(&deskryptor_tcp, &deskryptor_udp, baza_zdarzen,
+			4, wysylanie_keepalive, wiadomosc_na_tcp,
+			wiadomosc_na_udp);
 		return;
 	}
 	debug("Pętla obsługi zdarzeń!");
 	if (event_base_dispatch(baza_zdarzen) == -1) {
 		perror("Nie udało się uruchomić pętli obsługi zdarzeń.");
 		wyczysc(&deskryptor_tcp, &deskryptor_udp, baza_zdarzen,
-			wysylanie_keepalive);
+			3, wysylanie_keepalive, wiadomosc_na_tcp,
+			wiadomosc_na_udp);
 		return;
 	}
+	wyczysc(&deskryptor_tcp, &deskryptor_udp, baza_zdarzen,
+		3, wysylanie_keepalive, wiadomosc_na_tcp, wiadomosc_na_udp);
 	debug("Wychodzimy z pętli obsługi zdarzeń.");
 }
 
