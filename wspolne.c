@@ -214,7 +214,7 @@ void konkatenacja(char *const pierwszy, const char *const drugi,
 		  size_t dlugosc_drugiego)
 {
 	size_t poczatek = strlen(pierwszy);
-	memcpy(pierwszy + poczatek, drugi, dlugosc_drugiego + 1);
+	memcpy(pierwszy + poczatek, drugi, dlugosc_drugiego);
 }
 
 ssize_t czytaj_do_konca_linii(const int deskryptor,
