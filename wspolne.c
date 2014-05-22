@@ -276,3 +276,74 @@ int min(const int a, const int b)
 		return b;
 	return a;
 }
+
+rodzaj_naglowka rozpoznaj_naglowek(const char *const naglowek)
+{
+	switch (naglowek[0]) {
+	case 'C':
+		return CLIENT;
+	case 'U':
+		return UPLOAD;
+	case 'A':
+		return ACK;
+	case 'D':
+		return DATA;
+	case 'R':
+		return RETRANSMIT;
+	case 'K':
+		return KEEPALIVE;
+	default:
+		return INNY;
+	}
+}
+
+char* podaj_slowo(const char *const naglowek, int ktore)
+{
+	const char *poczatek = naglowek;
+	const char *koniec;
+	char *wynik = NULL;
+	size_t ile_kopiowac, ile_alokowac;
+	if (ktore < 0) {
+		debug("ktos chyba na glowe upadl i chce ujemne slowo!");
+		return NULL;
+	}
+	while (ktore--) {
+		if (poczatek == NULL)
+			return NULL;
+		poczatek = strchr(poczatek, ' ');
+	}
+	if (poczatek == NULL)
+		return NULL;
+	koniec = strchr(poczatek, ' ');
+	if (koniec == NULL)
+		koniec = strchr(poczatek, '\0');
+	ile_kopiowac = koniec - poczatek;
+	if (0[koniec] == ' ')
+		ile_alokowac = ile_kopiowac + 1;
+	else
+		ile_alokowac = ile_kopiowac;
+	wynik = malloc(ile_alokowac);
+	memcpy(wynik, naglowek, ile_kopiowac);
+	(ile_alokowac - 1)[wynik] = '\0';
+	return wynik;
+}
+
+int32_t wyskub_liczbe(const char *const ktora, int ktore)
+{
+
+	return -1;
+}
+
+int wyskub_dane_z_naglowka(const char *const naglowek,
+			   int *const nr, int *const ack,
+			   int *const win)
+{
+	rodzaj_naglowka r = rozpoznaj_naglowek(naglowek);
+	/* switch (r) { */
+	/* case UPLOAD: */
+	/* case DATA: */
+	/* case RETRANSMIT: */
+
+	/* } */
+	return 5;
+}

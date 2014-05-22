@@ -14,7 +14,17 @@
 const char* const DOMYSLNY_NUMER_PORTU;
 const ssize_t BLAD_CZYTANIA;
 
-bool ustaw_gniazdo_nieblokujace(const int gniazdo);
+typedef enum naglowek {
+	CLIENT,
+	UPLOAD,
+	DATA,
+	ACK,
+	RETRANSMIT,
+	KEEPALIVE,
+	INNY
+} rodzaj_naglowka;
+
+extern bool ustaw_gniazdo_nieblokujace(const int gniazdo);
 
 /* Działa tylko na liczbach dodatnich. */
 extern bool jest_liczba_w_przedziale(const char *const poczatek,
@@ -76,6 +86,14 @@ extern int max(const int a, const int b);
 
 extern int min(const int a, const int b);
 
+/* Czyta z deskryptora cala linie tekstu,  */
 extern ssize_t czytaj_do_vectora(const int deskryptor, char **wynik);
+
+/* Trzeba będzie ulepszyć, teraz to optymistyczna heura */
+extern rodzaj_naglowka rozpoznaj_naglowek(const char *const naglowek);
+
+extern int wyskub_dane_z_naglowka(const char *const naglowek,
+				  int *const nr, int *const ack,
+				  int *const win);
 
 #endif

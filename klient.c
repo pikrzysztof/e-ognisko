@@ -17,6 +17,12 @@ static const bool DEBUG = true;
 static const bool DEBUG = false;
 #endif
 
+typedef struct {
+	struct event_base* baza_zdarzen;
+	ssize_t ostatnio_odebrany_numer;
+	ssize_t ostatnio_odebrany_ack;
+} udp_arg;
+
 void zle_uzywane(const char *const nazwa_programu)
 {
 	fatal("Program uruchamia się %s -s nazwa_serwera", nazwa_programu);
@@ -69,15 +75,36 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 	}
 }
 
-void czytaj_i_reaguj_udp(evutil_socket_t gniazdo_udp, short flagi,
-			 void *baza_zdarzen)
+void skoncz_udp(struct event_base *baza, char *komunikat)
 {
-	debug("Funkcja %s jeszcze nie zaimplementowana.", __func__);
-	if (false)
-		if (event_base_loopbreak((struct event_base *) baza_zdarzen)
-		    != 0) {
-			perror("Nie udało się wyskoczyć z pętli.");
-		}
+	perror(komunikat);
+	if (event_base_loopbreak(baza) != 0) {
+		perror("Nie można wyskoczyć z pętli.");
+	}
+}
+
+void czytaj_i_reaguj_udp(evutil_socket_t gniazdo_udp, short flagi,
+			 void *baza_i_liczby)
+{
+	udp_arg potrzebne = *((udp_arg *) baza_i_liczby);
+	char *wiadomosc;
+	ssize_t ile_wczytane;
+	const ssize_t MAKSYMALNA_DLUGOSC_NAGLOWKA = 30;
+	if (flagi & EV_TIMEOUT || !(flagi & EV_READ)) {
+		skoncz_udp(potrzebne.baza_zdarzen, "Za długo czekamy na UDP.");
+		return;
+	}
+	ile_wczytane = czytaj_do_vectora(gniazdo_udp, &wiadomosc);
+	if (ile_wczytane == BLAD_CZYTANIA ||
+	    ile_wczytane > MAKSYMALNA_DLUGOSC_NAGLOWKA) {
+		skoncz_udp(potrzebne.baza_zdarzen, "Dziwny nagłówek UDP.");
+		return;
+	}
+	/* switch (rodzaj_naglowka(wiadomosc)) { */
+	/* case DATA: */
+
+	/* } */
+
 }
 
 void wyslij_keepalive(evutil_socket_t minus_jeden, short flagi,
@@ -187,6 +214,7 @@ void dzialaj(const char* const adres_serwera, const char* const port)
 	evutil_socket_t deskryptor_tcp = -1;
 	evutil_socket_t deskryptor_udp = -1;
 	int32_t moj_numer_kliencki;
+	udp_arg dla_funkcji_udp;
 	struct timeval dziesiec_setnych = {0, 100000};
 	debug("ustawiamy gniazda na nieblokujace");
 	if (!ustaw_gniazdo_nieblokujace(STDIN_FILENO) ||
@@ -237,9 +265,12 @@ void dzialaj(const char* const adres_serwera, const char* const port)
 			1, wysylanie_keepalive);
 		return;
 	}
+	dla_funkcji_udp.baza_zdarzen = baza_zdarzen;
+	dla_funkcji_udp.ostatnio_odebrany_ack = -1;
+	dla_funkcji_udp.ostatnio_odebrany_numer = -1;
 	wiadomosc_na_udp = event_new(baza_zdarzen, deskryptor_udp,
 				     EV_PERSIST | EV_READ, czytaj_i_reaguj_udp,
-				     &baza_zdarzen);
+				     &dla_funkcji_udp);
 	wiadomosc_na_tcp = event_new(baza_zdarzen, deskryptor_tcp,
 				     EV_PERSIST | EV_READ, czytaj_i_reaguj_tcp,
 				     &baza_zdarzen);
