@@ -51,19 +51,22 @@ void wyczysc(evutil_socket_t *deskryptor,
 void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 			 void *baza_zdarzen)
 {
-	if (flagi & EV_TIMEOUT) {
-		debug("Długo nie otrzymaliśmy połaczenia TCP.");
+	if (flagi & EV_TIMEOUT || !(flagi & EV_READ)) {
+		perror("Problem z połączeniem TCP, długo nie ma wiadomości.");
+		if (event_base_loopbreak((struct event_base *) baza_zdarzen)
+		    != 0) {
+			perror("Nie udało się wyskoczyć z pętli.");
+		}
+		return;
+	}
+	debug("Czytamy z TCP!");
+	if (sendfile(STDOUT_FILENO, gniazdo_tcp, NULL, SIZE_MAX) < 0) {
+		perror("Problem z przesłaniem danych z TCP na STDOUT.");
 		if (event_base_loopbreak((struct event_base *) baza_zdarzen)
 		    != 0) {
 			perror("Nie udało się wyskoczyć z pętli.");
 		}
 	}
-	debug("Czytamy z TCP!");
-	if (false)
-		if (event_base_loopbreak((struct event_base *) baza_zdarzen)
-		    != 0) {
-			perror("Nie udało się wyskoczyć z pętli.");
-		}
 }
 
 void czytaj_i_reaguj_udp(evutil_socket_t gniazdo_udp, short flagi,
@@ -164,6 +167,14 @@ evutil_socket_t ustanow_polaczenie(const int protokol,
 		return -1;
 	}
 	freeaddrinfo(adres_binarny_serwera);
+	if (protokol == IPPROTO_TCP) {
+		if (evutil_make_socket_nonblocking(gniazdo) != 0) {
+			perror("Nie można zrobić gniazda nieblokującego.");
+			if (close(gniazdo) != 0)
+				perror("Nie można zamknąć gniazda.");
+			return -1;
+		}
+	}
 	return gniazdo;
 }
 
