@@ -347,8 +347,8 @@ int32_t wyskub_liczbe(const char *const ktora, size_t ktore_slowo)
 }
 
 int wyskub_dane_z_naglowka(const char *const naglowek,
-			   int *const nr, int *const ack,
-			   int *const win)
+			   int32_t *const nr, int32_t *const ack,
+			   int32_t *const win)
 {
 	rodzaj_naglowka r = rozpoznaj_naglowek(naglowek);
 	*nr = -1;
@@ -377,4 +377,112 @@ int wyskub_dane_z_naglowka(const char *const naglowek,
 		return -1;
 	}
 	return 0;
+}
+
+static char *const zrob_ack(const int32_t ack, const int32_t win)
+{
+	const size_t MAX_ROZMIAR_NAGLOWKA = 30;
+	const ssize_t MINIMALNA_DLUGOSC_NAGLOWKA = 8;
+	char *const wynik = malloc(MAX_ROZMIAR_NAGLOWKA);
+	if (wynik == NULL)
+		return NULL;
+	if (sprintf(wynik, "ACK %"SCNd32" %"SCNd32"\n", ack, win)
+	    < MINIMALNA_DLUGOSC_NAGLOWKA) {
+		free(wynik);
+		return NULL;
+	}
+	return wynik;
+}
+
+static char *const zrob_upload(const int32_t nr, const size_t rozmiar_wyniku)
+{
+	char *const wynik = malloc(rozmiar_wyniku);
+	const ssize_t MINIMALNA_DLUGOSC_NAGLOWKA = 9;
+	if (wynik == NULL)
+		return NULL;
+	if (sprintf(wynik, "UPLOAD %"SCNd32"\n", nr)
+	    < MINIMALNA_DLUGOSC_NAGLOWKA) {
+		free(wynik);
+		return NULL;
+	}
+	return wynik;
+}
+
+static char *const zrob_data(const int32_t nr, const int32_t ack,
+			     const int32_t win, const size_t rozmiar_wyniku)
+{
+	char *const wynik = malloc(rozmiar_wyniku);
+	const ssize_t MINIMALNA_DLUGOSC_NAGLOWKA = 11;
+	if (wynik == NULL)
+		return NULL;
+	if (sprintf(wynik, "DATA %"SCNd32" %"SCNd32" %"SCNd32"\n",
+		    nr, ack, win) < MINIMALNA_DLUGOSC_NAGLOWKA) {
+		free(wynik);
+		return NULL;
+	}
+	return wynik;
+}
+
+static char *const zrob_keepalive()
+{
+	char *const wynik = malloc(40);
+	const ssize_t MINIMALNA_DLUGOSC_NAGLOWKA = 10;
+	if (wynik == NULL)
+		return NULL;
+	if (sprintf(wynik, "KEEPALIVE\n") < MINIMALNA_DLUGOSC_NAGLOWKA) {
+		free(wynik);
+		return NULL;
+	}
+	return NULL;
+}
+
+static char *const zrob_retransmit(const int32_t nr)
+{
+	char *const wynik = malloc(40);
+	const ssize_t MINIMALNA_DLUGOSC_NAGLOWKA = 10;
+	if (wynik == NULL)
+		return NULL;
+	if (sprintf(wynik, "RETRANSMIT %"SCNd32"\n", nr)
+	    < MINIMALNA_DLUGOSC_NAGLOWKA) {
+		free(wynik);
+		return NULL;
+	}
+	return wynik;
+}
+
+static char *const zrob_client(const int32_t clientid)
+{
+	char *const wynik = malloc(40);
+	const ssize_t MINIMALNA_DLUGOSC_NAGLOWKA = 8;
+	if (wynik == NULL)
+		return NULL;
+	if (sprintf(wynik, "CLIENT %"SCNd32"\n", clientid)
+	    < MINIMALNA_DLUGOSC_NAGLOWKA) {
+		free(wynik);
+		return NULL;
+	}
+	return wynik;
+}
+
+char *const zrob_naglowek(const rodzaj_naglowka r,
+			  const int32_t nr, const int32_t ack,
+			  const int32_t win, const size_t rozmiar_wyniku)
+{
+	switch (r) {
+	case CLIENT:
+		return zrob_client(nr);
+	case RETRANSMIT:
+		return zrob_retransmit(nr);
+	case UPLOAD:
+		return zrob_upload(nr, rozmiar_wyniku);
+	case DATA:
+		return zrob_data(nr, ack, win, rozmiar_wyniku);
+	case ACK:
+		return zrob_ack(ack, win);
+	case KEEPALIVE:
+		return zrob_keepalive();
+	default:
+		debug("Ktos chce dziwny naglowek.");
+		return NULL;
+	}
 }

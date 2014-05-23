@@ -11,6 +11,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#define wypisz_linie debug("%i", __LINE__)
+
 const char* const DOMYSLNY_NUMER_PORTU;
 const ssize_t BLAD_CZYTANIA;
 
@@ -24,6 +26,10 @@ typedef enum naglowek {
 	INNY
 } rodzaj_naglowka;
 
+extern char *const zrob_naglowek(const rodzaj_naglowka r,
+				 const int32_t nr, const int32_t ack,
+				 const int32_t win,
+				 const size_t rozmiar_wyniku);
 extern bool ustaw_gniazdo_nieblokujace(const int gniazdo);
 
 /* Działa tylko na liczbach dodatnich. */

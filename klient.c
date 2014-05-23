@@ -9,49 +9,19 @@
 #include <string.h>
 #include "err.h"
 #include "wspolne.h"
+#include "biblioteka_klienta.h"
 #include <event2/event.h>
 #include <stdarg.h>
+
 #ifndef NDEBUG
 static const bool DEBUG = true;
 #else
 static const bool DEBUG = false;
 #endif
 
-typedef struct {
-	struct event_base* baza_zdarzen;
-	ssize_t ostatnio_odebrany_numer;
-	ssize_t ostatnio_odebrany_ack;
-} udp_arg;
-
 void zle_uzywane(const char *const nazwa_programu)
 {
 	fatal("Program uruchamia się %s -s nazwa_serwera", nazwa_programu);
-}
-
-/* Pod ... sa struct event* */
-void wyczysc(evutil_socket_t *deskryptor,
-	     evutil_socket_t *deskryptor_2,
-	     struct event_base *baza_zdarzen,
-	     unsigned int liczba_wydarzen, ...)
-{
-	va_list wydarzenia;
-	unsigned int i;
-	if (deskryptor != NULL) {
-		if (close(*deskryptor) != 0)
-			perror("Nie udało się zamknąć deskryptora.");
-	}
-	if (deskryptor_2 != NULL) {
-		if (close(*deskryptor_2) != 0)
-			perror("Nie udało się zamknąć deskryptora.");
-	}
-	va_start(wydarzenia, liczba_wydarzen);
-	for (i = 0; i < liczba_wydarzen; ++i) {
-		event_free(va_arg(wydarzenia, struct event *));
-	}
-	va_end(wydarzenia);
-	if (baza_zdarzen != NULL) {
-		event_base_free(baza_zdarzen);
-	}
 }
 
 void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
@@ -83,28 +53,63 @@ void skoncz_udp(struct event_base *baza, char *komunikat)
 	}
 }
 
+int obsluz_ack(evutil_socket_t gniazdo, const char *const naglowek,
+	       ssize_t *const ostatnio_odebrany_ack,
+	       ssize_t *const ostatnio_odebrany_nr)
+{
+	int32_t nr, ack, win;
+	char *wiadomosc;
+	char *format;
+	const size_t ROZMIAR_FORMATU = 20;
+	if (wyskub_dane_z_naglowka(naglowek, &nr, &ack, &win) != 0)
+		return -1;
+	if (ack == (*ostatnio_odebrany_ack) + 1) {
+		(*ostatnio_odebrany_ack) = ack;
+		sprintf(wiadomosc, "UPLOAD %"SCNu32"\n", ack);
+		format = malloc(ROZMIAR_FORMATU);
+		sprintf(format, "%s%is\n","%", win);
+		debug("FORMAT TO %s", format);
+		scanf(format, strchr(wiadomosc, '\0'));
+		/* write(gniazdo); */
+	}
+}
+
 void czytaj_i_reaguj_udp(evutil_socket_t gniazdo_udp, short flagi,
 			 void *baza_i_liczby)
 {
 	udp_arg potrzebne = *((udp_arg *) baza_i_liczby);
-	char *wiadomosc;
+	char *naglowek;
 	ssize_t ile_wczytane;
 	const ssize_t MAKSYMALNA_DLUGOSC_NAGLOWKA = 30;
 	if (flagi & EV_TIMEOUT || !(flagi & EV_READ)) {
 		skoncz_udp(potrzebne.baza_zdarzen, "Za długo czekamy na UDP.");
 		return;
 	}
-	ile_wczytane = czytaj_do_vectora(gniazdo_udp, &wiadomosc);
+	ile_wczytane = czytaj_do_vectora(gniazdo_udp, &naglowek);
 	if (ile_wczytane == BLAD_CZYTANIA ||
 	    ile_wczytane > MAKSYMALNA_DLUGOSC_NAGLOWKA) {
 		skoncz_udp(potrzebne.baza_zdarzen, "Dziwny nagłówek UDP.");
 		return;
 	}
-	/* switch (rodzaj_naglowka(wiadomosc)) { */
-	/* case DATA: */
-
-	/* } */
-
+	switch (rozpoznaj_naglowek(naglowek)) {
+	case DATA:
+		if (obsluz_data(gniazdo_udp, naglowek,
+				&potrzebne.ostatnio_odebrany_ack,
+				&potrzebne.ostatnio_odebrany_nr) != 0) {
+			skoncz_udp(potrzebne.baza_zdarzen, "Źle z DATA.");
+		}
+		break;
+	case ACK:
+		if (obsluz_ack(gniazdo_udp, naglowek,
+			       &potrzebne.ostatnio_odebrany_ack,
+			       &potrzebne.ostatnio_odebrany_nr) != 0) {
+			skoncz_udp(potrzebne.baza_zdarzen, "Źle z ACK.");
+		}
+		break;
+	default:
+		skoncz_udp(potrzebne.baza_zdarzen, "Dziwny pakiet od serwera.");
+		break;
+	}
 }
 
 void wyslij_keepalive(evutil_socket_t minus_jeden, short flagi,
@@ -114,54 +119,6 @@ void wyslij_keepalive(evutil_socket_t minus_jeden, short flagi,
 	if (!wyslij_tekst(arg, "KEEPALIVE\n")) {
 		perror("Nie udalo sie wyspac KEEPALIVE.");
 	}
-}
-
-bool popros_o_retransmisje(const int deskryptor, const int numer)
-{
-	const size_t MAX_ROZMIAR_BUFORA = 30;
-	char *const tekst = malloc(MAX_ROZMIAR_BUFORA * sizeof(char));
-	bool wynik;
-	if (tekst == NULL)
-		return false;
-	if (sprintf(tekst, "RETRANSMIT %i\n", numer) < 0) {
-		free(tekst);
-		return false;
-	}
-	wynik = wyslij_tekst(deskryptor, tekst);
-	free(tekst);
-	return wynik;
-}
-
-/* Daje BLAD_CZYTANIA jak cos sie nie uda, EOF jak jest koniec pliku, */
-/* 0 jak sie uda. */
-int daj_dane_serwerowi(const int deskryptor,
-			const int numer_paczki, const size_t okno)
-{
-	const char *const POCZATEK_KOMUNIKATU = "UPLOAD ";
-	size_t DLUGOSC_POCZATKU = strlen(POCZATEK_KOMUNIKATU) + 10;
-	char *const tekst = malloc(okno + DLUGOSC_POCZATKU);
-	ssize_t ile_przeczytane;
-	if (tekst == NULL)
-		return BLAD_CZYTANIA;
-	if (sprintf(tekst, "%s%i\n", POCZATEK_KOMUNIKATU, numer_paczki) < 0) {
-		free(tekst);
-		return BLAD_CZYTANIA;
-	}
-	ile_przeczytane = read(deskryptor, tekst + strlen(tekst), okno);
-	if (ile_przeczytane < 0) {
-		free(tekst);
-		return BLAD_CZYTANIA;
-	}
-	if (ile_przeczytane == 0) {
-		free(tekst);
-		return EOF;
-	}
-	if (wyslij_tekst(deskryptor, tekst)) {
-		free(tekst);
-		return 0;
-	}
-	free(tekst);
-	return BLAD_CZYTANIA;
 }
 
 evutil_socket_t ustanow_polaczenie(const int protokol,
@@ -267,7 +224,7 @@ void dzialaj(const char* const adres_serwera, const char* const port)
 	}
 	dla_funkcji_udp.baza_zdarzen = baza_zdarzen;
 	dla_funkcji_udp.ostatnio_odebrany_ack = -1;
-	dla_funkcji_udp.ostatnio_odebrany_numer = -1;
+	dla_funkcji_udp.ostatnio_odebrany_nr = -1;
 	wiadomosc_na_udp = event_new(baza_zdarzen, deskryptor_udp,
 				     EV_PERSIST | EV_READ, czytaj_i_reaguj_udp,
 				     &dla_funkcji_udp);
