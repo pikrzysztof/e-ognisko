@@ -23,6 +23,14 @@ static const bool DEBUG = false;
 const ssize_t BLAD_CZYTANIA = EOF + 1 >= 0 ? -5 : EOF + 1;
 const char *const DOMYSLNY_NUMER_PORTU = "12534";
 
+bool jest_int32(const char *const liczba)
+{
+	const char *const MAX_INT32 = "2147483647";
+	if (liczba == NULL)
+		return false;
+	return jest_liczba_w_przedziale("0", MAX_INT32, liczba);
+}
+
 bool ustaw_gniazdo_nieblokujace(const int gniazdo)
 {
 	int biezace_flagi = fcntl(gniazdo, F_GETFL, 0);
@@ -297,7 +305,7 @@ rodzaj_naglowka rozpoznaj_naglowek(const char *const naglowek)
 	}
 }
 
-char* podaj_slowo(const char *const naglowek, int ktore)
+char* podaj_slowo(const char *const naglowek, size_t ktore)
 {
 	const char *poczatek = naglowek;
 	const char *koniec;
@@ -307,10 +315,12 @@ char* podaj_slowo(const char *const naglowek, int ktore)
 		debug("ktos chyba na glowe upadl i chce ujemne slowo!");
 		return NULL;
 	}
-	while (ktore--) {
+	while (ktore --> 0) {
 		if (poczatek == NULL)
 			return NULL;
 		poczatek = strchr(poczatek, ' ');
+		if (poczatek != NULL)
+			++poczatek;
 	}
 	if (poczatek == NULL)
 		return NULL;
@@ -318,20 +328,22 @@ char* podaj_slowo(const char *const naglowek, int ktore)
 	if (koniec == NULL)
 		koniec = strchr(poczatek, '\0');
 	ile_kopiowac = koniec - poczatek;
-	if (0[koniec] == ' ')
-		ile_alokowac = ile_kopiowac + 1;
-	else
-		ile_alokowac = ile_kopiowac;
+	ile_alokowac = ile_kopiowac + 1;
 	wynik = malloc(ile_alokowac);
-	memcpy(wynik, naglowek, ile_kopiowac);
+	memcpy(wynik, poczatek, ile_kopiowac);
 	(ile_alokowac - 1)[wynik] = '\0';
 	return wynik;
 }
 
-int32_t wyskub_liczbe(const char *const ktora, int ktore)
+int32_t wyskub_liczbe(const char *const ktora, size_t ktore_slowo)
 {
-
-	return -1;
+	char *liczba = podaj_slowo(ktora, ktore_slowo);
+	int32_t wynik = -1;
+	if (jest_int32(liczba)) {
+		wynik = atoi(liczba);
+	}
+	free(liczba);
+	return wynik;
 }
 
 int wyskub_dane_z_naglowka(const char *const naglowek,
@@ -339,11 +351,30 @@ int wyskub_dane_z_naglowka(const char *const naglowek,
 			   int *const win)
 {
 	rodzaj_naglowka r = rozpoznaj_naglowek(naglowek);
-	/* switch (r) { */
-	/* case UPLOAD: */
-	/* case DATA: */
-	/* case RETRANSMIT: */
-
-	/* } */
-	return 5;
+	*nr = -1;
+	*ack = -1;
+	*win = -1;
+	switch (r) {
+	case DATA:
+		*ack = wyskub_liczbe(naglowek, 2);
+		*win = wyskub_liczbe(naglowek, 3);
+		if (*ack == -1 || *win == -1)
+			return -1;
+	case UPLOAD:
+	case RETRANSMIT:
+		*nr = wyskub_liczbe(naglowek, 1);
+		if (*nr == -1)
+			return -1;
+		return 0;
+	case ACK:
+		*ack = wyskub_liczbe(naglowek, 1);
+		*win = wyskub_liczbe(naglowek, 2);
+		if (*ack == -1 || *win == -1)
+			return -1;
+		return 0;
+	default:
+		debug("Nie udało się dopasować do wzorca.");
+		return -1;
+	}
+	return 0;
 }
