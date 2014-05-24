@@ -131,5 +131,25 @@ int obsluz_data(evutil_socket_t gniazdo, const char *const naglowek,
 		       ssize_t *ostatnio_odebrany_ack,
 		       ssize_t *ostatnio_odebrany_nr)
 {
-	return 5;
+	int32_t nr, ack, win;
+	rodzaj_naglowka r;
+	char *napis;
+	if (wyskub_dane_z_naglowka(naglowek, &nr, &ack, &win) == -1) {
+		return -1;
+	}
+	if (nr != (*ostatnio_odebrany_nr) + 1
+	    && (*ostatnio_odebrany_nr) != -1) {
+		return -1;
+	}
+	const char *poczatek_danych = strchr(naglowek, '\n');
+	++poczatek_danych;
+	if (printf("%s", poczatek_danych) > 0) {
+		++(*ostatnio_odebrany_nr);
+	}
+	++(*ostatnio_odebrany_nr);
+	if (zrob_paczke_danych(win, nr, &napis) == EOF) {
+		return 0;
+
+	}
+	return -1;
 }

@@ -159,6 +159,7 @@ bool wyslij_numer_kliencki(int deskryptor, int32_t numer_kliencki)
 	sprintf(bufor, "CLIENT %"SCNd32"\n", numer_kliencki);
 	dlugosc_danych = strlen(bufor);
 	assert(bufor[dlugosc_danych] == '\0');
+	debug("wysylam wiadomosc z nr klienckim %s", bufor);
 	if (write(deskryptor, bufor, dlugosc_danych * sizeof(char)) !=
 	    dlugosc_danych) {
 		perror("Nie udało się wysłać numeru klienckiego.\n");

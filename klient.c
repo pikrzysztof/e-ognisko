@@ -151,14 +151,6 @@ evutil_socket_t ustanow_polaczenie(const int protokol,
 		return -1;
 	}
 	freeaddrinfo(adres_binarny_serwera);
-	if (protokol == IPPROTO_TCP) {
-		if (evutil_make_socket_nonblocking(gniazdo) != 0) {
-			perror("Nie można zrobić gniazda nieblokującego.");
-			if (close(gniazdo) != 0)
-				perror("Nie można zamknąć gniazda.");
-			return -1;
-		}
-	}
 	return gniazdo;
 }
 
@@ -191,6 +183,11 @@ void dzialaj(const char* const adres_serwera, const char* const port)
 		wyczysc(&deskryptor_tcp, NULL, NULL, 0);
 		return;
 	}
+	if (evutil_make_socket_nonblocking(deskryptor_tcp) != 0) {
+		perror("Nie da sie ustawic gniazda TCP na nieblokujace.");
+		wyczysc(&deskryptor_tcp, NULL, NULL, 0);
+		return;
+	}
 	deskryptor_udp = ustanow_polaczenie(IPPROTO_UDP, adres_serwera, port);
 	if (deskryptor_udp == -1) {
 		perror("Nie można ustanowić połączenia UDP.");
@@ -202,6 +199,7 @@ void dzialaj(const char* const adres_serwera, const char* const port)
 		wyczysc(&deskryptor_tcp, &deskryptor_udp, NULL, 0);
 		return;
 	}
+	debug("wyslalismy nr kliencki");
 	if (!ustaw_gniazdo_nieblokujace(deskryptor_tcp) ||
 	    !ustaw_gniazdo_nieblokujace(deskryptor_udp)) {
 		perror("Nie udało się ustawić gniazda nieblokującego.");

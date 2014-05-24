@@ -97,8 +97,9 @@ extern ssize_t czytaj_do_vectora(const int deskryptor, char **wynik);
 /* Trzeba będzie ulepszyć, teraz to optymistyczna heura */
 extern rodzaj_naglowka rozpoznaj_naglowek(const char *const naglowek);
 
+/* -1 jak sie nie uda, 0 jak sie uda */
 extern int wyskub_dane_z_naglowka(const char *const naglowek,
-				  int *const nr, int *const ack,
-				  int *const win);
+				  int32_t *const nr, int32_t *const ack,
+				  int32_t *const win);
 
 #endif
