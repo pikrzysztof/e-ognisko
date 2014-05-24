@@ -223,6 +223,7 @@ void konkatenacja(char *const pierwszy, const char *const drugi,
 {
 	size_t poczatek = strlen(pierwszy);
 	memcpy(pierwszy + poczatek, drugi, dlugosc_drugiego);
+	(poczatek + dlugosc_drugiego)[pierwszy] = '\0';
 }
 
 ssize_t czytaj_do_konca_linii(const int deskryptor,
