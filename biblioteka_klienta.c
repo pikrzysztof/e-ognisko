@@ -1,10 +1,14 @@
 #include "biblioteka_klienta.h"
 
-int zrob_paczke_danych(const size_t okno, const int32_t nr_paczki, char **napis)
+ /* Daje EOF jak jest EOF, liczba bajtow do wyslania, jak sie udalo, */
+ /* BLAD_CZYTANIA jak jest blad. */
+static ssize_t zrob_paczke_danych(const size_t okno, const int32_t nr_paczki,
+			      char **napis)
 {
 	static bool koniec_wejscia;
 	static int32_t ostatnio_wyslany_nr;
 	static char* ostatnio_wyslany_pakiet;
+	static ssize_t ostatni_wynik;
 	size_t rozmiar;
 	char *tmp;
 	ssize_t ile_wczytano;
@@ -17,18 +21,23 @@ int zrob_paczke_danych(const size_t okno, const int32_t nr_paczki, char **napis)
 		memcpy(*napis, ostatnio_wyslany_pakiet, rozmiar);
 		if (*napis == NULL)
 			return BLAD_CZYTANIA;
-		return 0;
+		return ostatni_wynik;
 	}
 	free(ostatnio_wyslany_pakiet);
+	if (koniec_wejscia) {
+		return EOF;
+	}
 	ostatnio_wyslany_pakiet = zrob_naglowek(UPLOAD, nr_paczki, -1, -1,
 						MIN_ROZMIAR + okno);
 	tmp = malloc(okno + 5);
-	if (tmp == NULL) {
+	if (tmp == NULL || ostatnio_wyslany_pakiet  == NULL) {
 		free(ostatnio_wyslany_pakiet);
 		ostatnio_wyslany_pakiet = NULL;
 		return BLAD_CZYTANIA;
 	}
+	ostatni_wynik = strlen(ostatnio_wyslany_pakiet);
 	ile_wczytano = read(STDIN_FILENO, tmp, okno);
+	ostatni_wynik += ile_wczytano;
 	if (ile_wczytano < 0) {
 		free(ostatnio_wyslany_pakiet);
 		ostatnio_wyslany_pakiet = NULL;
@@ -51,7 +60,7 @@ int zrob_paczke_danych(const size_t okno, const int32_t nr_paczki, char **napis)
 	}
 	memcpy(*napis, ostatnio_wyslany_pakiet,
 	       strlen(ostatnio_wyslany_pakiet) + 1);
-	return 0;
+	return ostatni_wynik;
 }
 
 void wyczysc(evutil_socket_t *deskryptor,
@@ -127,29 +136,62 @@ int daj_dane_serwerowi(const int deskryptor,
 	return BLAD_CZYTANIA;
 }
 
-int obsluz_data(evutil_socket_t gniazdo, const char *const naglowek,
-		       ssize_t *ostatnio_odebrany_ack,
-		       ssize_t *ostatnio_odebrany_nr)
+int obsluz_data(const evutil_socket_t gniazdo,
+		const char *const naglowek,
+		ssize_t *const ostatnio_odebrany_ack,
+		ssize_t *const ostatnio_odebrany_nr)
 {
 	int32_t nr, ack, win;
+	int paczka_danych_wynik;
 	rodzaj_naglowka r;
 	char *napis;
+	char *dane;
+	ssize_t ile_danych;
 	if (wyskub_dane_z_naglowka(naglowek, &nr, &ack, &win) == -1) {
-		return -1;
-	}
-	if (nr != (*ostatnio_odebrany_nr) + 1
-	    && (*ostatnio_odebrany_nr) != -1) {
-		return -1;
-	}
-	const char *poczatek_danych = strchr(naglowek, '\n');
-	++poczatek_danych;
-	if (printf("%s", poczatek_danych) > 0) {
-		++(*ostatnio_odebrany_nr);
-	}
-	++(*ostatnio_odebrany_nr);
-	if (zrob_paczke_danych(win, nr, &napis) == EOF) {
 		return 0;
-
 	}
-	return -1;
+	paczka_danych_wynik = zrob_paczke_danych(win, ack, &napis);
+	if (paczka_danych_wynik == 1) {
+		write(gniazdo, napis, strlen(napis));
+		(*ostatnio_odebrany_ack) = ack;
+	} else if (paczka_danych_wynik == BLAD_CZYTANIA) {
+		return 0;
+	}
+	ile_danych = czytaj_do_vectora(gniazdo, &dane);
+	++(*ostatnio_odebrany_nr);
+	if (ile_danych <= 0) {
+		return -1;
+	}
+	if (write(STDOUT_FILENO, dane, ile_danych) != ile_danych) {
+		perror("Nie mozna cos pisac na stdout!");
+		free(dane);
+		return 0;
+	}
+	free(dane);
+	return 0;
+}
+
+int obsluz_ack(const evutil_socket_t gniazdo, const char *const naglowek,
+	       ssize_t *const ostatnio_odebrany_ack,
+	       ssize_t *const ostatnio_odebrany_nr)
+{
+	int32_t nr, ack, win;
+	char *wiadomosc;
+	ssize_t rozmiar_wiadomosci;
+	if (wyskub_dane_z_naglowka(naglowek, &nr, &ack, &win) != 0)
+		return 0;
+	rozmiar_wiadomosci = zrob_paczke_danych(win, ack, &wiadomosc);
+	*ostatnio_odebrany_ack = ack;
+	if (rozmiar_wiadomosci == EOF)
+		return 0;
+	if (rozmiar_wiadomosci == BLAD_CZYTANIA)
+		return 0;
+	if (write(gniazdo, wiadomosc, rozmiar_wiadomosci)
+	    != rozmiar_wiadomosci) {
+		free(wiadomosc);
+		return -1;
+	}
+	free(wiadomosc);
+	return 0;
+
 }

@@ -85,6 +85,9 @@ remake: clean all
 debug: $(DEPENDS) $(ALL)
 	make debuglevel=1
 
+tags: $(ALL)
+	etags *.[ch]
+
 tests:
 	rm -f test
 	make test debuglevel=1

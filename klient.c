@@ -12,6 +12,7 @@
 #include "biblioteka_klienta.h"
 #include <event2/event.h>
 #include <stdarg.h>
+#include <assert.h>
 
 #ifndef NDEBUG
 static const bool DEBUG = true;
@@ -50,27 +51,6 @@ void skoncz_udp(struct event_base *baza, char *komunikat)
 	perror(komunikat);
 	if (event_base_loopbreak(baza) != 0) {
 		perror("Nie można wyskoczyć z pętli.");
-	}
-}
-
-int obsluz_ack(evutil_socket_t gniazdo, const char *const naglowek,
-	       ssize_t *const ostatnio_odebrany_ack,
-	       ssize_t *const ostatnio_odebrany_nr)
-{
-	int32_t nr, ack, win;
-	char *wiadomosc;
-	char *format;
-	const size_t ROZMIAR_FORMATU = 20;
-	if (wyskub_dane_z_naglowka(naglowek, &nr, &ack, &win) != 0)
-		return -1;
-	if (ack == (*ostatnio_odebrany_ack) + 1) {
-		(*ostatnio_odebrany_ack) = ack;
-		sprintf(wiadomosc, "UPLOAD %"SCNu32"\n", ack);
-		format = malloc(ROZMIAR_FORMATU);
-		sprintf(format, "%s%is\n","%", win);
-		debug("FORMAT TO %s", format);
-		scanf(format, strchr(wiadomosc, '\0'));
-		/* write(gniazdo); */
 	}
 }
 
@@ -131,6 +111,8 @@ evutil_socket_t ustanow_polaczenie(const int protokol,
 						     adres_serwera);
 	struct addrinfo* adres_binarny_serwera = NULL;
 	int set = 1;
+	assert((protokol == IPPROTO_TCP && typ_gniazda == SOCK_STREAM) ||
+	       (protokol == IPPROTO_UDP && typ_gniazda == SOCK_DGRAM));
 	if (gniazdo == -1)
 		return gniazdo;
 	adres_binarny_serwera = podaj_adres_binarny(adres_serwera,
