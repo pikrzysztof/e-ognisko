@@ -66,7 +66,7 @@ ALLOBJECTS  := $(subst .c,.o,$(SOURCES))
 OBJECTS	    := $(filter-out $(MAINOBJECTS),$(ALLOBJECTS))
 # pliki obiektowe, ktore nie zawieraja definicji main
 
-all: $(DEPENDS) $(ALL) Makefile
+all: $(DEPENDS) $(ALL) Makefile tags
 
 $(DEPENDS) : %.d : %.c				# tworzenie submakefiles
 	@$(CC) -MM $< > $@			# 	- zaleznosc
