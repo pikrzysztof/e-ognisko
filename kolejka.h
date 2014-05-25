@@ -30,10 +30,10 @@ size_t FIFO_HIGH_WATERMARK /* = FIFO_SIZE */;
 
 /* Ustawia watermarki na pozadane wartosci,  */
 /* rzuca -1 jak cos sie nie zgadza, 0 jak sie udaje. */
-extern int ustaw_wodnego_Marka(const int argc, const char *const *const argv);
+extern void ustaw_wodnego_Marka(const int argc, char *const *const argv);
 
 /* Ustawia rozmiar fifo. */
 /* Daje -1 jak sie cos nie zgadza, 0 jak sie uda. */
-extern int ustaw_rozmiar_fifo(const int argc, const char *const *const argv);
+extern void ustaw_rozmiar_fifo(const int argc, char *const *const argv);
 
 #endif

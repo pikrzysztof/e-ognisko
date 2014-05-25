@@ -9,23 +9,21 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include "err.h"
-
+#include "biblioteka_serwera.h"
+#include "kolejka.h"
+#include "bufor_wychodzacych.h"
 #ifndef NDEBUG
 const bool DEBUG = true;
 #else
 const bool DEBUG = false;
 #endif
 
-void zle_uzywane(const char *const nazwa_programu)
-{
-	fatal("Program uruchamia się %s\n", nazwa_programu);
-}
-
 int main(int argc, char **argv)
 {
 	const char *const MAXINT32 ="2147483647";
-	if (ustaw_wodnego_Marka(argc, argv) != 0)
-		fatal("Zle wartosci watermarkow.");
+	ustaw_rozmiar_fifo(argc, argv);
+	ustaw_wodnego_Marka(argc, argv);
+	ustaw_rozmiar_wychodzacych(argc, argv);
 
 
 	return EXIT_SUCCESS;

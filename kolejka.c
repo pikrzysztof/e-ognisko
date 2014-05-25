@@ -10,8 +10,9 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <inttypes.h>
-
-static bool jest_oznaczenie(const int argc, const char *const *const argv,
+#include "wspolne.h"
+#include "err.h"
+static bool jest_oznaczenie(const int argc, char *const *const argv,
 			    const char *const oznaczenie)
 {
 	int i;
@@ -22,55 +23,53 @@ static bool jest_oznaczenie(const int argc, const char *const *const argv,
 	return false;
 }
 
-int ustaw_wodnego_Marka(const int argc, const char *const *const argv)
+void ustaw_wodnego_Marka(const int argc, char *const *const argv)
 {
 	const char *const LOW_OZNACZENIE = "-L";
 	const char *const HIGH_OZNACZENIE = "-H";
 	const char *const MAX_ROZMIAR = "2147483647";
 	const char *const MIN_ROZMIAR = "0";
-	char *tmp;
+	const size_t DOMYSLNY_NISKI_MAREK =  0;
+	const char *tmp;
 	if (jest_oznaczenie(argc, argv, LOW_OZNACZENIE)) {
 		tmp = daj_opcje(LOW_OZNACZENIE, argc, argv);
-		if (tmp == NULL) {
-			return -1;
-		}
-		if (!jest_liczba_w_przedziale(MIN_ROZMIAR, MAX_ROZMIAR, tmp)) {
-			return -1;
-		}
+		if (tmp == NULL)
+			fatal("Zle podany parametr %s.", LOW_OZNACZENIE);
+		if (!jest_liczba_w_przedziale(MIN_ROZMIAR, MAX_ROZMIAR, tmp))
+			fatal("Zle podany parametr %s.", LOW_OZNACZENIE);
 		FIFO_LOW_WATERMARK = atoi(tmp);
+	} else {
+		FIFO_LOW_WATERMARK = DOMYSLNY_NISKI_MAREK;
 	}
 	if (jest_oznaczenie(argc, argv, HIGH_OZNACZENIE)) {
 		tmp = daj_opcje(HIGH_OZNACZENIE, argc, argv);
-		if (tmp == NULL) {
-			return -1;
-		}
-		if (!jest_liczba_w_przedziale(MIN_ROZMIAR, MAX_ROZMIAR, tmp)) {
-			return -1;
-		}
+		if (tmp == NULL)
+			fatal("Zle podany parametr %s.", HIGH_OZNACZENIE);
+		if (!jest_liczba_w_przedziale(MIN_ROZMIAR, MAX_ROZMIAR, tmp))
+			fatal("Zle podany parametr %s.", HIGH_OZNACZENIE);
 		FIFO_HIGH_WATERMARK = atoi(tmp);
+	} else {
+		FIFO_HIGH_WATERMARK = FIFO_SIZE;
 	}
 	if (FIFO_HIGH_WATERMARK <= FIFO_LOW_WATERMARK)
-		return -1;
+		fatal("Zle podane watermarki.");
 	if (FIFO_HIGH_WATERMARK > FIFO_SIZE)
-		return -1;
-	return 0;
+		fatal("Zle podane watermarki.");
 }
 
-int ustaw_rozmiar_fifo(int argc, const char *const *const argv)
+void ustaw_rozmiar_fifo(int argc, char *const *const argv)
 {
 	FIFO_SIZE = 10560;
 	const char *const OZNACZENIE = "-F";
 	const char *const MIN_ROZMIAR = "500";
 	const char *const MAX_ROZMIAR = "500000";
-	char tmp;
+	const char *tmp;
 	if (jest_oznaczenie(argc, argv, OZNACZENIE)) {
-		tmp = daj_opcje(argc, argv, OZNACZENIE);
+		tmp = daj_opcje(OZNACZENIE, argc, argv);
 		if (tmp == NULL)
-			return -1;
-		if (!jest_liczba_w_przedziale(MIN_ROZMIAR, MAX_ROZMIAR, tmp)) {
-			return -1;
-		}
+			fatal("Parametr %s zle podany.", OZNACZENIE);
+		if (!jest_liczba_w_przedziale(MIN_ROZMIAR, MAX_ROZMIAR, tmp))
+			fatal("Parametr %s zle podany.", OZNACZENIE);
 		FIFO_SIZE = atoi(tmp);
 	}
-	return 0;
 }
