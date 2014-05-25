@@ -31,7 +31,7 @@ int ustaw_wodnego_Marka(const int argc, const char *const *const argv)
 	char *tmp;
 	if (jest_oznaczenie(argc, argv, LOW_OZNACZENIE)) {
 		tmp = daj_opcje(LOW_OZNACZENIE, argc, argv);
-		if (tmp = NULL) {
+		if (tmp == NULL) {
 			return -1;
 		}
 		if (!jest_liczba_w_przedziale(MIN_ROZMIAR, MAX_ROZMIAR, tmp)) {
@@ -41,7 +41,7 @@ int ustaw_wodnego_Marka(const int argc, const char *const *const argv)
 	}
 	if (jest_oznaczenie(argc, argv, HIGH_OZNACZENIE)) {
 		tmp = daj_opcje(HIGH_OZNACZENIE, argc, argv);
-		if (tmp = NULL) {
+		if (tmp == NULL) {
 			return -1;
 		}
 		if (!jest_liczba_w_przedziale(MIN_ROZMIAR, MAX_ROZMIAR, tmp)) {
