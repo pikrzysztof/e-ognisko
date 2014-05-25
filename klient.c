@@ -37,7 +37,7 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 		return;
 	}
 	debug("Czytamy z TCP!");
-	if (sendfile(STDOUT_FILENO, gniazdo_tcp, NULL, SIZE_MAX) < 0) {
+	if (sendfile(STDERR_FILENO, gniazdo_tcp, NULL, SIZE_MAX) < 0) {
 		perror("Problem z przesłaniem danych z TCP na STDOUT.");
 		if (event_base_loopbreak((struct event_base *) baza_zdarzen)
 		    != 0) {

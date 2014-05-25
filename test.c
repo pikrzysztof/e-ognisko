@@ -28,11 +28,11 @@ int main()
 	napis[4] = '4';
 	napis[5] = ' ';
 	napis[6] = '\0';
-	assert(safe_add(INT16_MIN, INT16_MIN) == INT16_MIN);
-	assert(safe_add(INT16_MAX, INT16_MAX) == INT16_MAX);
-	assert(safe_add(INT16_MAX, 1) == INT16_MAX);
-	assert(safe_add(INT16_MAX, INT16_MIN) == -1);
-	assert(safe_add(INT16_MIN, -1) == INT16_MIN);
+	assert(bezpiecznie_dodaj(INT16_MIN, INT16_MIN) == INT16_MIN);
+	assert(bezpiecznie_dodaj(INT16_MAX, INT16_MAX) == INT16_MAX);
+	assert(bezpiecznie_dodaj(INT16_MAX, 1) == INT16_MAX);
+	assert(bezpiecznie_dodaj(INT16_MAX, INT16_MIN) == -1);
+	assert(bezpiecznie_dodaj(INT16_MIN, -1) == INT16_MIN);
 	konkatenacja(napis, napis2, strlen(napis2) + 1);
 	assert(strcmp(napis, "01234 yyyy") == 0);
 	dopisz_na_koncu(napis, "dopisane: %i", 5);

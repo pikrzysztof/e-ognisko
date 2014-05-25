@@ -21,7 +21,12 @@ void zle_uzywane(const char *const nazwa_programu)
 	fatal("Program uruchamia się %s\n", nazwa_programu);
 }
 
-int main()
+int main(int argc, char **argv)
 {
+	const char *const MAXINT32 ="2147483647";
+	if (ustaw_wodnego_Marka(argc, argv) != 0)
+		fatal("Zle wartosci watermarkow.");
+
+
 	return EXIT_SUCCESS;
 }
