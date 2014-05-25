@@ -147,6 +147,7 @@ int obsluz_data(const evutil_socket_t gniazdo,
 	char *napis;
 	char *dane;
 	ssize_t ile_danych;
+	size_t UDP_MTU = 1600;
 	if (wyskub_dane_z_naglowka(naglowek, &nr, &ack, &win) == -1) {
 		return 0;
 	}
@@ -157,9 +158,11 @@ int obsluz_data(const evutil_socket_t gniazdo,
 	} else if (paczka_danych_wynik == BLAD_CZYTANIA) {
 		return 0;
 	}
-	ile_danych = czytaj_do_vectora(gniazdo, &dane);
-	++(*ostatnio_odebrany_nr);
+	dane = malloc(UDP_MTU);
+	ile_danych = read(gniazdo, dane, UDP_MTU);
+	(*ostatnio_odebrany_nr) = nr;
 	if (ile_danych <= 0) {
+		free(dane);
 		return -1;
 	}
 	if (write(STDOUT_FILENO, dane, ile_danych) != ile_danych) {

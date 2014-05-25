@@ -203,7 +203,7 @@ void dzialaj(const char* const adres_serwera, const char* const port)
 		return;
 	}
 	dla_funkcji_udp.baza_zdarzen = baza_zdarzen;
-	dla_funkcji_udp.ostatnio_odebrany_ack = -1;
+	dla_funkcji_udp.ostatnio_odebrany_ack = 0;
 	dla_funkcji_udp.ostatnio_odebrany_nr = -1;
 	wiadomosc_na_udp = event_new(baza_zdarzen, deskryptor_udp,
 				     EV_PERSIST | EV_READ, czytaj_i_reaguj_udp,
