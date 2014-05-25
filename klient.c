@@ -182,12 +182,6 @@ void dzialaj(const char* const adres_serwera, const char* const port)
 		return;
 	}
 	debug("wyslalismy nr kliencki");
-	if (!ustaw_gniazdo_nieblokujace(deskryptor_tcp) ||
-	    !ustaw_gniazdo_nieblokujace(deskryptor_udp)) {
-		perror("Nie udało się ustawić gniazda nieblokującego.");
-		wyczysc(&deskryptor_tcp, &deskryptor_udp, NULL, 0);
-		return;
-	}
 	baza_zdarzen = event_base_new();
 	if (baza_zdarzen == NULL) {
 		perror("Nie można zrobić bazy zdarzeń.");
