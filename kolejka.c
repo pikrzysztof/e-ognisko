@@ -12,6 +12,11 @@
 #include <inttypes.h>
 #include "wspolne.h"
 #include "err.h"
+
+size_t FIFO_SIZE;
+size_t FIFO_LOW_WATERMARK;
+size_t FIFO_HIGH_WATERMARK;
+
 static bool jest_oznaczenie(const int argc, char *const *const argv,
 			    const char *const oznaczenie)
 {
@@ -23,7 +28,7 @@ static bool jest_oznaczenie(const int argc, char *const *const argv,
 	return false;
 }
 
-void ustaw_wodnego_Marka(const int argc, char *const *const argv)
+void init_wodnego_Marka(const int argc, char *const *const argv)
 {
 	const char *const LOW_OZNACZENIE = "-L";
 	const char *const HIGH_OZNACZENIE = "-H";
@@ -72,4 +77,37 @@ void ustaw_rozmiar_fifo(int argc, char *const *const argv)
 			fatal("Parametr %s zle podany.", OZNACZENIE);
 		FIFO_SIZE = atoi(tmp);
 	}
+}
+
+void usun_FIFO(FIFO *const fifo)
+{
+	free(fifo->kolejka);
+	free(fifo);
+}
+
+FIFO* init_FIFO()
+{
+	FIFO *wynik = malloc(sizeof(FIFO));
+	if (wynik == NULL)
+		return NULL;
+	wynik->kolejka = malloc(FIFO_SIZE);
+	if (wynik->kolejka == NULL) {
+		free(wynik);
+		return NULL;
+	}
+	wynik->liczba_zuzytych_bajtow = 0;
+	wynik->stan = FILLING;
+}
+
+void ustaw_wodnego_Marka(FIFO *const fifo)
+{
+	if (fifo->liczba_zuzytych_bajtow <= FIFO_LOW_WATERMARK)
+		fifo->stan = FILLING;
+	if (fifo->liczba_zuzytych_bajtow >= FIFO_HIGH_WATERMARK)
+		fifo->stan = ACTIVE;
+}
+
+size_t daj_FIFO_SIZE()
+{
+	return FIFO_SIZE;
 }

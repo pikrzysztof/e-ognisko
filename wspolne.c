@@ -21,6 +21,7 @@ static const bool DEBUG = false;
 
 /* Takim oto sposobem będzie zawsze różne od EOF i 0. */
 const ssize_t BLAD_CZYTANIA = EOF + 1 >= 0 ? -5 : EOF + 1;
+const char *const OZNACZENIE_PARAMETRU_PORTU = "-p";
 const char *const DOMYSLNY_NUMER_PORTU = "12534";
 
 bool jest_int32(const char *const liczba)
@@ -149,6 +150,16 @@ void debug(const char *fmt, ...)
 	if (errno != 0) {
 		fprintf(stderr, "ERROR: (%d; %s)\n", errno, strerror(errno));
 	}
+}
+
+void info(const char *fmt, ...)
+{
+	va_list  fmt_args;
+	fprintf(stderr, "INFO: ");
+	va_start(fmt_args, fmt);
+	vfprintf(stderr, fmt, fmt_args);
+	va_end(fmt_args);
+	fprintf(stderr, "\n");
 }
 
 bool wyslij_numer_kliencki(int deskryptor, int32_t numer_kliencki)

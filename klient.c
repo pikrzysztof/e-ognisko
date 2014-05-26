@@ -241,8 +241,7 @@ void dzialaj(const char* const adres_serwera, const char* const port)
 
 int main(int argc, char **argv)
 {
-	const char* const OZNACZENIE_PARAMETRU_ADRESU = "-s";
-	const char* const OZNACZENIE_PARAMETRU_PORTU = "-p";
+	const char *const OZNACZENIE_PARAMETRU_ADRESU = "-s";
 	const char *adres_serwera = NULL;
 	const char *port = NULL;
 	const useconds_t ILE_SPAC = 500000;

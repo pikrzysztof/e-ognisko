@@ -2,7 +2,6 @@
 #define _MIKSER_H_
 #include <stdlib.h>
 
-
 struct mixer_input {
 	void *data;
 	size_t len;

@@ -13,7 +13,8 @@
 
 #define wypisz_linie debug("%i", __LINE__)
 
-const char* const DOMYSLNY_NUMER_PORTU;
+const char *const OZNACZENIE_PARAMETRU_PORTU;
+const char *const DOMYSLNY_NUMER_PORTU;
 const ssize_t BLAD_CZYTANIA;
 
 typedef enum naglowek {
@@ -60,6 +61,9 @@ extern int zrob_gniazdo(const int typ, const char *const ludzki_adres);
 
 /* Wypisuje wiadomosc na stderr, jesli DEBUG == true */
 extern void debug(const char *fmt, ...);
+
+/* Wypisuje wiadomosci diagnostyczne na stderr. */
+extern void info(const char *fmt, ...);
 
 extern bool wyslij_numer_kliencki(int deskryptor, int32_t numer_kliencki);
 

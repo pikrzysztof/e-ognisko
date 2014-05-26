@@ -18,22 +18,24 @@ enum stan_FIFO {
 
 typedef struct {
 	enum stan_FIFO stan;
-	size_t liczba_zuzytych_miejsc;  /* Stopien zapelniena kolejki. */
-	size_t maksymalna_liczba_elementow;
-	size_t pierwszy;        /* Wskazuje na pierwszy element kolejki. */
-	int16_t *kolejka;
+	size_t liczba_zuzytych_bajtow;  /* Stopien zapelniena kolejki. */
+	void *kolejka;
 } FIFO;
-
-size_t FIFO_SIZE /* = 10560 */;
-size_t FIFO_LOW_WATERMARK /* = 0 */;
-size_t FIFO_HIGH_WATERMARK /* = FIFO_SIZE */;
 
 /* Ustawia watermarki na pozadane wartosci,  */
 /* rzuca -1 jak cos sie nie zgadza, 0 jak sie udaje. */
-extern void ustaw_wodnego_Marka(const int argc, char *const *const argv);
+extern void ustaw_wodnego_Marka(FIFO *const fifo);
+
+extern void init_wodnego_Marka(const int argc, char *const *const argv);
 
 /* Ustawia rozmiar fifo. */
 /* Daje -1 jak sie cos nie zgadza, 0 jak sie uda. */
-extern void ustaw_rozmiar_fifo(const int argc, char *const *const argv);
+extern void init_rozmiar_fifo(const int argc, char *const *const argv);
+
+extern FIFO* init_FIFO();
+
+extern void usun_FIFO(FIFO *const fifo);
+
+extern size_t daj_FIFO_SIZE();
 
 #endif
