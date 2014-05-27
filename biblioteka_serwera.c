@@ -1,4 +1,5 @@
 #include "wspolne.h"
+#include "klient_struct.h"
 #include "biblioteka_serwera.h"
 #include <inttypes.h>
 #include <stdbool.h>
@@ -42,4 +43,27 @@ evutil_socket_t zrob_i_przygotuj_gniazdo(const char *const port,
 		syserr("Nie można związać gniazda z adresem i portem.");
 	}
 	return gniazdo;
+}
+
+int wstepne_ustalenia_z_klientem(const evutil_socket_t deskryptor_tcp,
+				 const int32_t numer_kliencki,
+				 klient **const klienci,
+				 const size_t MAX_KLIENTOW)
+{
+	if (dodaj_klienta(deskryptor_tcp, numer_kliencki, klienci,
+			  MAX_KLIENTOW) != 0) {
+		info("Nie udało się dodać nowego klienta.");
+		if (close(deskryptor_tcp) != 0)
+			info("Nie udało się zamknąć deskryptora"
+			     " klienta %"SCNd32".", numer_kliencki);
+		return -1;
+	}
+	if (!wyslij_numer_kliencki(deskryptor_tcp,
+				   numer_kliencki)) {
+		info("Nie udało się wysłać "
+		     "numeru klienckiego.");
+		usun_klienta(deskryptor_tcp, klienci,
+			     MAX_KLIENTOW);
+		return -1;
+	}
 }

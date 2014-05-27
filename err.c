@@ -11,7 +11,6 @@
 void syserr(const char *fmt, ...)
 {
   va_list fmt_args;
-
   fprintf(stderr, "ERROR: ");
 
   va_start(fmt_args, fmt);

@@ -4,17 +4,19 @@
 /* numer albumu 332534 */
 /* W projekcie zostały wykorzystane fragmenty kodu z zajęć. */
 /* kodowanie UTF-8 */
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdbool.h>
 #include "err.h"
 #include "biblioteka_serwera.h"
 #include "kolejka.h"
 #include "wspolne.h"
 #include "bufor_wychodzacych.h"
 #include "klient_struct.h"
+#include <sys/socket.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <stdbool.h>
+#include <assert.h>
+
 #ifndef NDEBUG
 const bool DEBUG = true;
 #else
@@ -25,9 +27,10 @@ const size_t MAX_KLIENTOW = 20;
 
 struct do_przyjmowania_tcp {
 	size_t *liczba_klientow;
-	klient **const klienci;
+	klient **const klienci;	/* Tablica wskaznikow. */
 	struct event *tcp_czytanie;
 	struct event_base *baza;
+	int32_t numer_kliencki;
 };
 
 void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
@@ -36,21 +39,29 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 	struct do_przyjmowania_tcp *arg = (struct do_przyjmowania_tcp *)
 		dane;
 	struct sockaddr *addr;
-	socklen_t dlugosc;
 	evutil_socket_t deskryptor;
+	socklen_t dlugosc;
+	assert(*(arg->liczba_klientow) < MAX_KLIENTOW);
 	deskryptor = accept(gniazdo_tcp, addr, &dlugosc);
 	if (deskryptor == -1) {
 		info("Błąd w przyjmowaniu połączenia.");
-	} else {
-		if (dodaj_klienta(arg->klienci, deskryptor, MAX_KLIENTOW) != 0) {
-			info("Nie udało się dodać nowego klienta.");
-			if (close(deskryptor) != 0)
-				info("Nie udało się zamknąć deskryptora"
-				     " klienta.");
-		}
-			close(deskryptor);
-
 	}
+	if (wstepne_ustalenia_z_klientem(deskryptor, arg->numer_kliencki,
+				     arg->klienci,
+				     MAX_KLIENTOW);
+	++(arg->numer_kliencki);
+	++(*(arg->liczba_klientow));
+	if (*(arg->liczba_klientow) < MAX_KLIENTOW) {
+		if (event_add(arg->tcp_czytanie, NULL) != 0) {
+			perror("Nie udało się ustawić czekania na "
+			       "kolejne połaczenie TCP.");
+			if (arg->liczba_klientow == 0) {
+				syserr("Nie udało się ustawić czekania "
+				       "na klientów to kończę.");
+			}
+		}
+	}
+
 }
 
 int main(int argc, char **argv)
@@ -90,9 +101,8 @@ int main(int argc, char **argv)
 		syserr("Nie można zrobić gniazda UDP nieblokującego.");
 	if (listen(gniazdo_tcp, MAX_DLUGOSC_KOLEJKI) != 0)
 		syserr("Nie można słuchać.");
-	tcp_czytanie = event_new(baza_zdarzen, gniazdo_tcp,
-				 EV_PERSIST | EV_READ, czytaj_i_reaguj_tcp,
-				 klienci);
+	tcp_czytanie = event_new(baza_zdarzen, gniazdo_tcp, EV_READ,
+				 czytaj_i_reaguj_tcp, klienci);
 
 	return EXIT_SUCCESS;
 }

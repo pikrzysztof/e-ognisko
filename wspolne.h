@@ -4,12 +4,12 @@
 /* numer albumu 332534 */
 /* W projekcie zostały wykorzystane fragmenty kodu z zajęć. */
 /* kodowanie UTF-8 */
+#ifndef WSPOLNE_H_
+#define WSPOLNE_H_
 
 #include <stdlib.h>
 #include <stdbool.h>
 #include <inttypes.h>
-#ifndef COMMON_H
-#define COMMON_H
 
 #define wypisz_linie debug("%i", __LINE__)
 
