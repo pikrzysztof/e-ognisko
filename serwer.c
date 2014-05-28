@@ -99,7 +99,8 @@ void wyslij_raporty(evutil_socket_t nic, short flagi, void* zero)
 		perror("Nie da się przygotować raportu o klientach.");
 		return;
 	}
-	if (wyslij_wiadomosc_wszystkim(raport, klienci, MAX_KLIENTOW) != 0) {
+	if (wyslij_wiadomosc_wszystkim(raport, klienci, MAX_KLIENTOW, -1)
+	    != 0) {
 		syserr("Nie udało się wysłać raportów ludziom.");
 	}
 	free(raport);

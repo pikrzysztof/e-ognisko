@@ -97,16 +97,62 @@ char* przygotuj_raport_grupowy(klient **const klienci,
 	wynik[0] = '\n';
 	wynik[1] = '\0';
 	for (i = 0; i < MAX_KLIENTOW; ++i) {
-		if (klienci[i] != NULL) {
-			tmp = SITREP(klienci[i]);
-			if (tmp == NULL) {
-				info("Nie możemy przygotować "
-				     "SITREP o kliencie %"SCNd32".",
-				     klienci[i]->numer_kliencki);
-				continue;
-			}
-			strcat(wynik, tmp);
-			free(tmp);
+		if (klienci[i] == NULL)
+			continue;
+		tmp = SITREP(klienci[i]);
+		if (tmp == NULL) {
+			info("Nie możemy przygotować "
+			     "SITREP o kliencie %"SCNd32".",
+			     klienci[i]->numer_kliencki);
+			continue;
+		}
+		strcat(wynik, tmp);
+		free(tmp);
+	}
+	return wynik;
+}
+
+static int wyslij_wiadomosc(char *wiadomosc, size_t rozmiar, klient *kli,
+			    evutil_socket_t deskryptor)
+{
+	if (kli == NULL)
+		return 0;
+	if (deskryptor == -1) {
+		if (write(kli->deskryptor_tcp, wiadomosc, rozmiar) != rozmiar) {
+			usun(kli);
+			info("Usunęliśmy klienta bo słabo działał.");
+			return -1;
+		}
+	} else {
+		if (kli->port == NULL)
+			return 0;
+		if (sendto(deskryptor, wiadomosc, rozmiar,
+			   MSG_DONTWAIT | MSG_NOSIGNAL,
+			   (struct sockaddr *) &(kli->adres_udp),
+			   sizeof(struct sockaddr_in6)) != rozmiar) {
+			usun(kli);
+			info("Usunęliśmy klienta bo słabo działał.");
+			return -1;
+		}
+	}
+	return 0;
+}
+
+int wyslij_wiadomosc_wszystkim(char *wiadomosc, klient **const klienci,
+			       const size_t MAX_KLIENTOW,
+			       const evutil_socket_t deskryptor)
+{
+	size_t i;
+	evutil_socket_t desk;
+	int wynik = 0;
+	size_t rozmiar_wiadomosci = strlen(wiadomosc);
+	for (i = 0; i < MAX_KLIENTOW; ++i) {
+		if (klienci[i] == NULL)
+			continue;
+		if (wyslij_wiadomosc(wiadomosc, rozmiar_wiadomosci,
+				     klienci[i], deskryptor) == -1) {
+			klienci[i] = NULL;
+			--wynik;
 		}
 	}
 	return wynik;

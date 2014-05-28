@@ -20,4 +20,10 @@ extern int wstepne_ustalenia_z_klientem(const evutil_socket_t deskryptor_tcp,
 extern char* przygotuj_raport_grupowy(klient **const klienci,
 				      const size_t MAX_KLIENTOW);
 
+/* Jak deskryptor jest -1 to wysyla po UDP. */
+/* Wynik: do ilu klientów nie udało się dotrzeć. */
+extern int wyslij_wiadomosc_wszystkim(char *wiadomosc, klient **const klienci,
+				      const size_t MAX_KLIENTOW,
+				      const evutil_socket_t deskryptor);
+
 #endif
