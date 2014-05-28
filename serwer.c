@@ -16,52 +16,93 @@
 #include <sys/types.h>
 #include <stdbool.h>
 #include <assert.h>
-
+#include <stdio.h>
+#include <unistd.h>
 #ifndef NDEBUG
 const bool DEBUG = true;
 #else
 const bool DEBUG = false;
 #endif
 
+const struct timeval czestotliwosc_raportow = {1, 0};
 const size_t MAX_KLIENTOW = 20;
+struct event *tcp_czytanie;
+struct event *wiadomosc_na_udp;
+struct event *tcp_wysylanie_raportu;
+struct event_base *baza_zdarzen;
+size_t liczba_klientow = 0;
+klient **klienci;
 
-struct do_przyjmowania_tcp {
-	size_t *liczba_klientow;
-	klient **const klienci;	/* Tablica wskaznikow. */
-	struct event *tcp_czytanie;
-	struct event_base *baza;
-	int32_t numer_kliencki;
-};
+void udp_czytanie(evutil_socket_t gniazdo_udp, short flagi, void *nic)
+{
+	const size_t MTU = 2000;
+	void *bufor = malloc(MTU);
+	struct sockaddr adres;
+	socklen_t dlugosc_adresu;
+	ssize_t ile_danych = recvfrom(gniazdo_udp, bufor, MTU, MSG_DONTWAIT,
+				      &adres, &dlugosc_adresu);
+	if (ile_danych <= 0) {
+		free(bufor);
+		return;
+	}
+	if (ogarnij_wiadomosc_udp(bufor, ile_danych, &adres) != 0) {
+		info("Przyszła wiadomość i nie udało się jej obsłużyć.\n"
+		     "Treść wiadomości: ");
+		if (write(STDERR_FILENO, bufor, ile_danych) < 0) {
+			info("Nie udało się pokazać wiadmości.");
+		}
+	}
+	free(bufor);
+}
 
 void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 			 void *dane)
 {
-	struct do_przyjmowania_tcp *arg = (struct do_przyjmowania_tcp *)
-		dane;
+	int32_t *numer_kliencki = (int32_t *) dane;
 	struct sockaddr *addr;
 	evutil_socket_t deskryptor;
 	socklen_t dlugosc;
-	assert(*(arg->liczba_klientow) < MAX_KLIENTOW);
+	assert(liczba_klientow < MAX_KLIENTOW);
 	deskryptor = accept(gniazdo_tcp, addr, &dlugosc);
 	if (deskryptor == -1) {
 		info("Błąd w przyjmowaniu połączenia.");
 	}
-	if (wstepne_ustalenia_z_klientem(deskryptor, arg->numer_kliencki,
-				     arg->klienci,
-				     MAX_KLIENTOW);
-	++(arg->numer_kliencki);
-	++(*(arg->liczba_klientow));
-	if (*(arg->liczba_klientow) < MAX_KLIENTOW) {
-		if (event_add(arg->tcp_czytanie, NULL) != 0) {
+	if (wstepne_ustalenia_z_klientem(deskryptor, *numer_kliencki,
+					 klienci, MAX_KLIENTOW) == 0) {
+		++liczba_klientow;
+	}
+	++(*numer_kliencki);
+	if (liczba_klientow < MAX_KLIENTOW) {
+		if (event_add(tcp_czytanie, NULL) != 0) {
 			perror("Nie udało się ustawić czekania na "
 			       "kolejne połaczenie TCP.");
-			if (arg->liczba_klientow == 0) {
+			if (liczba_klientow == 0) {
 				syserr("Nie udało się ustawić czekania "
 				       "na klientów to kończę.");
 			}
 		}
 	}
+	if (liczba_klientow == 1) {
+		if (event_add(tcp_wysylanie_raportu, &czestotliwosc_raportow)
+		    != 0) {
+			syserr("Nie można wysyłać raportów!");
+		}
+	}
+}
 
+void wyslij_raporty(evutil_socket_t nic, short flagi, void* zero)
+{
+
+	klient **tablica_klientow = (klient **) klienci;
+	char *raport = przygotuj_raport_grupowy(klienci, MAX_KLIENTOW);
+	if (raport == NULL) {
+		perror("Nie da się przygotować raportu o klientach.");
+		return;
+	}
+	if (wyslij_wiadomosc_wszystkim(raport, klienci, MAX_KLIENTOW) != 0) {
+		syserr("Nie udało się wysłać raportów ludziom.");
+	}
+	free(raport);
 }
 
 int main(int argc, char **argv)
@@ -69,13 +110,9 @@ int main(int argc, char **argv)
 	const char *port;
 	evutil_socket_t gniazdo_tcp;
 	evutil_socket_t gniazdo_udp;
-	size_t i, liczba_klientow = 0;
-	struct event *tcp_czytanie;
-	struct event *udp_czytanie;
-	struct event *tcp_wysylanie_raportu;
-	struct event_base *baza_zdarzen;
+	size_t i;
 	const int MAX_DLUGOSC_KOLEJKI = MAX_KLIENTOW;
-	klient **const klienci = malloc(MAX_KLIENTOW * sizeof(klient *));
+	klienci = malloc(sizeof(klient *) * MAX_KLIENTOW);
 	if (klienci == NULL)
 		syserr("Nie mozna zrobic tablicy klientow.");
 	ustaw_rozmiar_fifo(argc, argv);
@@ -101,8 +138,14 @@ int main(int argc, char **argv)
 		syserr("Nie można zrobić gniazda UDP nieblokującego.");
 	if (listen(gniazdo_tcp, MAX_DLUGOSC_KOLEJKI) != 0)
 		syserr("Nie można słuchać.");
-	tcp_czytanie = event_new(baza_zdarzen, gniazdo_tcp, EV_READ,
-				 czytaj_i_reaguj_tcp, klienci);
-
+	tcp_czytanie = event_new(baza_zdarzen, gniazdo_tcp,
+				 EV_READ & EV_PERSIST,
+				 czytaj_i_reaguj_tcp, NULL);
+	tcp_wysylanie_raportu = event_new(baza_zdarzen, -1,
+					  EV_TIMEOUT & EV_PERSIST,
+					  wyslij_raporty, NULL);
+	wiadomosc_na_udp = event_new(baza_zdarzen, gniazdo_udp,
+				 EV_READ & EV_PERSIST,
+				 udp_czytanie, NULL);
 	return EXIT_SUCCESS;
 }

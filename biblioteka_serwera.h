@@ -17,4 +17,7 @@ extern int wstepne_ustalenia_z_klientem(const evutil_socket_t deskryptor_tcp,
 					klient **const klienci,
 					const size_t MAX_KLIENTOW);
 
+extern char* przygotuj_raport_grupowy(klient **const klienci,
+				      const size_t MAX_KLIENTOW);
+
 #endif

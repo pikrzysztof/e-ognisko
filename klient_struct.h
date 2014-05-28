@@ -14,7 +14,7 @@ typedef struct {
 	int32_t numer_kliencki;
 } klient;
 
-extern const char *SITREP(const klient *const o_kim);
+extern char *SITREP(const klient *const o_kim);
 
 extern void usun(klient *kto);
 

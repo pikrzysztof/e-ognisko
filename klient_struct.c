@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include "klient_struct.h"
 #include "kolejka.h"
-const char *SITREP(const klient *const);
+char *SITREP(const klient *const);
 void usun(klient*);
 int dodaj_klienta(const evutil_socket_t, const in32_t,
 		  klient **const, const size_t);
@@ -87,7 +87,7 @@ void usun(klient *const kto)
 	zwolnij(3, kto->adres, kto->port, kto);
 }
 
-const char *SITREP(const klient *const o_kim)
+char *SITREP(const klient *const o_kim)
 {
 	if (o_kim == NULL) {
 		debug("Ktos chce sitrep o NULLu.");

@@ -6,6 +6,7 @@
 #include <event2/event.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <string.h>
 
 /* Jeśli miałoby nastąpić przepełnienie daje wartość maksymalną/minimalną typu. */
 int16_t bezpiecznie_dodaj(const int16_t pierwszy, const int16_t drugi)
@@ -66,4 +67,47 @@ int wstepne_ustalenia_z_klientem(const evutil_socket_t deskryptor_tcp,
 			     MAX_KLIENTOW);
 		return -1;
 	}
+}
+
+static size_t zlicz_aktywnych_klientow(klient **const klienci,
+				       const size_t MAX_KLIENTOW)
+{
+	size_t i, wynik = 0;
+	for (i = 0; i < MAX_KLIENTOW; ++i)
+		if (klienci[i] != NULL)
+			++wynik;
+	return wynik;
+}
+
+char* przygotuj_raport_grupowy(klient **const klienci,
+			       const size_t MAX_KLIENTOW)
+{
+	size_t i, ile_klientow;
+	char *wynik;
+	char *tmp;
+	const size_t ROZMIAR_SITREPU = 100;
+	ile_klientow = zlicz_aktywnych_klientow(klienci, MAX_KLIENTOW);
+	if (ile_klientow == 0)
+		return NULL;
+	wynik = malloc(ile_klientow * ROZMIAR_SITREPU + 5);
+	if (wynik == NULL) {
+		syserr("Zabrakło pamięci na "
+		       "wygenerowanie wiadomosci o klientach.");
+	}
+	wynik[0] = '\n';
+	wynik[1] = '\0';
+	for (i = 0; i < MAX_KLIENTOW; ++i) {
+		if (klienci[i] != NULL) {
+			tmp = SITREP(klienci[i]);
+			if (tmp == NULL) {
+				info("Nie możemy przygotować "
+				     "SITREP o kliencie %"SCNd32".",
+				     klienci[i]->numer_kliencki);
+				continue;
+			}
+			strcat(wynik, tmp);
+			free(tmp);
+		}
+	}
+	return wynik;
 }
