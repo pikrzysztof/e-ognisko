@@ -92,17 +92,14 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 
 void wyslij_raporty(evutil_socket_t nic, short flagi, void* zero)
 {
-
-	klient **tablica_klientow = (klient **) klienci;
 	char *raport = przygotuj_raport_grupowy(klienci, MAX_KLIENTOW);
 	if (raport == NULL) {
 		perror("Nie da się przygotować raportu o klientach.");
 		return;
 	}
-	if (wyslij_wiadomosc_wszystkim(raport, klienci, MAX_KLIENTOW, -1)
-	    != 0) {
-		syserr("Nie udało się wysłać raportów ludziom.");
-	}
+	liczba_klientow += wyslij_wiadomosc_wszystkim(raport, klienci,
+						      MAX_KLIENTOW, -1);
+	info("Wysłałem raport %s", raport);
 	free(raport);
 }
 

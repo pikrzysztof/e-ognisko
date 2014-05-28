@@ -1,6 +1,7 @@
 #include "wspolne.h"
 #include "klient_struct.h"
 #include "biblioteka_serwera.h"
+#include <time.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <event2/event.h>
@@ -156,4 +157,47 @@ int wyslij_wiadomosc_wszystkim(char *wiadomosc, klient **const klienci,
 		}
 	}
 	return wynik;
+}
+
+static size_t podaj_indeks_klienta(struct sockaddr *adres,
+				   klient **klienci, size_t MAX_KLIENTOW)
+{
+	size_t i;
+	for (i = 0; i < MAX_KLIENTOW, ++i) {
+		if (klienci[i] == NULL)
+			continue;
+		if (memcmp(adres, klienci[i]->adres_udp, sizeof(*adres)) == 0)
+			return i;
+	}
+	return MAX_KLIENTOW;
+}
+
+static void keepalive(struct sockaddr *adres,
+		      klient **klienci, size_t MAX_KLIENTOW)
+{
+	size_t kto = podaj_adres_klienta(adres, klienci, MAX_KLIENTOW);
+	if ((clock() - klienci[kto]->czas) / CLOCKS_PER_SEC < 1)
+		klienci[kto]->czas = clock();
+}
+
+int ogarnij_wiadomosc_udp(char *bufor, size_t ile_danych,
+			  struct sockaddr* adres, klient **klienci,
+			  size_t MAX_KLIENTOW)
+{
+	bufor[ile_danych] = '\0';
+	switch (rozpoznaj_naglowek(naglowek)) {
+	case CLIENT:
+		return zaktualizuj_klienta(bufor, ile_danych, adres,
+					   klienci, MAX_KLIENTOW);
+	case UPLOAD:
+		return dodaj_klientowi_dane(bufor, ile_danych, adres,
+					    klienci, MAX_KLIENTOW);
+	case RETRANSMIT:
+		return retransmit(bufor, ile_danych, adres,
+				  klienci, MAX_KLIENTOW);
+	case KEEPALIVE:
+		return keepalive(adres, klienci, MAX_KLIENTOW);
+	default:
+		return wywal(adres, klienci, MAX_KLIENTOW);
+	}
 }
