@@ -75,7 +75,7 @@ static size_t zlicz_aktywnych_klientow(klient **const klienci,
 {
 	size_t i, wynik = 0;
 	for (i = 0; i < MAX_KLIENTOW; ++i)
-		if (klienci[i] != NULL)
+		if (klienci[i] != NULL && klienci[i]->port != NULL)
 			++wynik;
 	return wynik;
 }
@@ -159,14 +159,15 @@ int wyslij_wiadomosc_wszystkim(char *wiadomosc, klient **const klienci,
 	return wynik;
 }
 
-static size_t podaj_indeks_klienta(struct sockaddr *adres,
-				   klient **klienci, size_t MAX_KLIENTOW)
+size_t podaj_indeks_klienta(struct sockaddr *adres,
+			    klient **const klienci, const size_t MAX_KLIENTOW)
 {
 	size_t i;
-	for (i = 0; i < MAX_KLIENTOW, ++i) {
+	for (i = 0; i < MAX_KLIENTOW; ++i) {
 		if (klienci[i] == NULL)
 			continue;
-		if (memcmp(adres, klienci[i]->adres_udp, sizeof(*adres)) == 0)
+		if (rowne((struct sockaddr *)&(klienci[i]->adres_udp),
+			  adres) == 0)
 			return i;
 	}
 	return MAX_KLIENTOW;
@@ -175,29 +176,61 @@ static size_t podaj_indeks_klienta(struct sockaddr *adres,
 static void keepalive(struct sockaddr *adres,
 		      klient **klienci, size_t MAX_KLIENTOW)
 {
-	size_t kto = podaj_adres_klienta(adres, klienci, MAX_KLIENTOW);
+	size_t kto = podaj_indeks_klienta(adres, klienci, MAX_KLIENTOW);
 	if ((clock() - klienci[kto]->czas) / CLOCKS_PER_SEC < 1)
 		klienci[kto]->czas = clock();
 }
 
-int ogarnij_wiadomosc_udp(char *bufor, size_t ile_danych,
+void wywal(struct sockaddr* adres, klient **klienci, size_t MAX_KLIENTOW)
+{
+	size_t indx_klienta = podaj_indeks_klienta(adres, klienci,
+						   MAX_KLIENTOW);
+	if (indx_klienta >= MAX_KLIENTOW)
+		return;
+	usun(klienci[indx_klienta]);
+	klienci[indx_klienta] = NULL;
+}
+
+
+
+static void zaktualizuj_klienta(char *bufor, size_t ile_danych,
+				struct sockaddr* adres, klient **klienci,
+				size_t MAX_KLIENTOW)
+{
+	int32_t nr, ack, win;
+	size_t i;
+	wyskub_dane_z_naglowka(bufor, &nr, &ack, &win);
+	if (nr < 0) {
+		debug("Ktoś wysłał nie taki numer co trzeba.");
+		wywal(adres, klienci, MAX_KLIENTOW);
+	} else {
+		dodaj_adresy(nr, adres, klienci, MAX_KLIENTOW);
+	}
+}
+
+void ogarnij_wiadomosc_udp(char *bufor, size_t ile_danych,
 			  struct sockaddr* adres, klient **klienci,
 			  size_t MAX_KLIENTOW)
 {
 	bufor[ile_danych] = '\0';
-	switch (rozpoznaj_naglowek(naglowek)) {
+	switch (rozpoznaj_naglowek(bufor)) {
 	case CLIENT:
-		return zaktualizuj_klienta(bufor, ile_danych, adres,
+		zaktualizuj_klienta(bufor, ile_danych, adres,
 					   klienci, MAX_KLIENTOW);
+		break;
 	case UPLOAD:
-		return dodaj_klientowi_dane(bufor, ile_danych, adres,
+		dodaj_klientowi_dane(bufor, ile_danych, adres,
 					    klienci, MAX_KLIENTOW);
+		break;
 	case RETRANSMIT:
-		return retransmit(bufor, ile_danych, adres,
+		retransmit(bufor, ile_danych, adres,
 				  klienci, MAX_KLIENTOW);
+		break;
 	case KEEPALIVE:
-		return keepalive(adres, klienci, MAX_KLIENTOW);
+		keepalive(adres, klienci, MAX_KLIENTOW);
+		break;
 	default:
-		return wywal(adres, klienci, MAX_KLIENTOW);
+		wywal(adres, klienci, MAX_KLIENTOW);
+		break;
 	}
 }

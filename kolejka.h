@@ -38,4 +38,6 @@ extern void usun_FIFO(FIFO *const fifo);
 
 extern size_t daj_FIFO_SIZE();
 
+extern int dodaj(FIFO *fifo, void *dane, size_t rozmiar_danych);
+
 #endif

@@ -368,6 +368,9 @@ int wyskub_dane_z_naglowka(const char *const naglowek,
 	*ack = -1;
 	*win = -1;
 	switch (r) {
+	case CLIENT:
+		*nr = wyskub_liczbe(naglowek, 1);
+		return 0;
 	case DATA:
 		*ack = wyskub_liczbe(naglowek, 2);
 		*win = wyskub_liczbe(naglowek, 3);

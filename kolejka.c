@@ -6,6 +6,7 @@
 /* kodowanie UTF-8 */
 
 #include "kolejka.h"
+#include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -110,4 +111,16 @@ void ustaw_wodnego_Marka(FIFO *const fifo)
 size_t daj_FIFO_SIZE()
 {
 	return FIFO_SIZE;
+}
+
+int dodaj(FIFO *fifo, void *dane, size_t rozmiar_danych)
+{
+	if (daj_FIFO_SIZE() - (fifo->liczba_zuzytych_bajtow)
+	    < rozmiar_danych) {
+		return -1;
+	}
+	memcpy(((char *) (fifo->kolejka)) + fifo->liczba_zuzytych_bajtow,
+	       dane, rozmiar_danych);
+	fifo->liczba_zuzytych_bajtow += rozmiar_danych;
+	return 0;
 }

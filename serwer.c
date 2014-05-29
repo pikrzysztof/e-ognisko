@@ -24,6 +24,12 @@ const bool DEBUG = true;
 const bool DEBUG = false;
 #endif
 
+typedef struct {
+	size_t rozmiar_danych;
+	size_t numer_paczki;
+	void *dane;
+} wiadomosc;
+
 const struct timeval czestotliwosc_raportow = {1, 0};
 const size_t MAX_KLIENTOW = 20;
 struct event *tcp_czytanie;
@@ -32,6 +38,7 @@ struct event *tcp_wysylanie_raportu;
 struct event_base *baza_zdarzen;
 size_t liczba_klientow = 0;
 klient **klienci;
+wiadomosc *historia;
 
 void udp_czytanie(evutil_socket_t gniazdo_udp, short flagi, void *nic)
 {
@@ -111,6 +118,7 @@ int main(int argc, char **argv)
 	size_t i;
 	const int MAX_DLUGOSC_KOLEJKI = MAX_KLIENTOW;
 	klienci = malloc(sizeof(klient *) * MAX_KLIENTOW);
+	historia = malloc(sizeof(wiadomosc) * )
 	if (klienci == NULL)
 		syserr("Nie mozna zrobic tablicy klientow.");
 	ustaw_rozmiar_fifo(argc, argv);

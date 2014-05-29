@@ -3,6 +3,8 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <netinet/ip.h>
+#include <sys/types.h>
 #include "klient_struct.h"
 #include "kolejka.h"
 char *SITREP(const klient *const);
@@ -45,6 +47,42 @@ static int poustawiaj_adresy(klient *kto)
 	return 0;
 }
 
+static int porownaj_ipv4(struct sockaddr_in *pierwszy,
+			 struct sockaddr_in *drugi)
+{
+	if (pierwszy->sin_port != drugi->sin_port)
+		return 1;
+	return pierwszy->sin_addr.s_addr - drugi->sin_addr.s_addr;
+}
+
+static int porownaj_ipv6(struct sockaddr_in6 *pierwszy,
+			 struct sockaddr_in6 *drugi)
+{
+	if (pierwszy->sin6_port != drugi->sin6_port)
+		return 1;
+	return memcmp(&(pierwszy->sin6_addr),
+		      &(drugi->sin6_addr), sizeof(pierwszy->sin6_addr));
+}
+
+
+int rowne(struct sockaddr *pierwszy, struct sockaddr *drugi)
+{
+	if (pierwszy == NULL && drugi == NULL)
+		return 0;
+	if (pierwszy == NULL || drugi == NULL)
+		return 1;
+	if (pierwszy->sa_family != drugi->sa_family)
+		return 1;
+	if (pierwszy->sa_family == AF_INET)
+		return porownaj_ipv4((struct sockaddr_in *) pierwszy,
+				     (struct sockaddr_in *) drugi);
+	if (pierwszy->sa_family = AF_INET6)
+		return porownaj_ipv6((struct sockaddr_in6 *) pierwszy,
+				     (struct sockaddr_in6 *) drugi);
+	info("Jakiś lewy adres dostaliśmy.");
+	return -1;
+}
+
 static klient *zrob_klienta(const evutil_socket_t deskryptor)
 {
 	klient *k = malloc(sizeof(klient));
@@ -71,6 +109,7 @@ static klient *zrob_klienta(const evutil_socket_t deskryptor)
 		usun(k);
 		return NULL;
 	}
+	k->czas = clock();
 	return k;
 }
 
@@ -163,4 +202,94 @@ void usun_klienta(const evutil_socket_t deskryptor_tcp,
 		return;
 	usun(klienci[klient]);
 	klienci[klient] = NULL;
+}
+
+static size_t zlokalizuj_po_nr_klienckim(const int32_t numer_kliencki,
+				  klient **const klienci,
+				  const size_t MAX_KLIENTOW)
+{
+	size_t i;
+	for (i = 0; i < MAX_KLIENTOW; ++i) {
+		if (klienci[i] != NULL &&
+		    klienci[i]->numer_kliencki == numer_kliencki)
+			return i;
+	}
+	return MAX_KLIENTOW;
+}
+
+void dodaj_adresy(const int32_t numer_kliencki, struct sockaddr *adres,
+		  klient **const klienci, const size_t MAX_KLIENTOW)
+{
+	size_t idx_klienta;
+	const size_t MAX_ROZMIAR_PORTU = 20;
+	/* Unikamy rzutowania potem. */
+	struct sockaddr_in *arg = (struct sockaddr_in *) adres;
+	struct sockaddr_in6 *arg2 = (struct sockaddr_in6 *) adres;
+	struct sockaddr_in *adr_kli;
+	idx_klienta = zlokalizuj_po_nr_klienckim(numer_kliencki,
+						 klienci, MAX_KLIENTOW);
+	if (idx_klienta >= MAX_KLIENTOW) {
+		wywal(adres, klienci, MAX_KLIENTOW);
+		return;
+	}
+	klienci[idx_klienta]->adres_udp.sin6_family = adres->sa_family;
+	if (adres->sa_family == AF_INET) {
+		adr_kli =
+			(struct sockaddr_in *)
+			(&(klienci[idx_klienta]->adres_udp));
+		adr_kli->sin_port = arg->sin_port;
+		adr_kli->sin_addr.s_addr = arg->sin_addr.s_addr;
+	} else if (adres->sa_family == AF_INET6) {
+		klienci[idx_klienta]->adres_udp.sin6_port =
+			arg2->sin6_port;
+		memcpy(&(klienci[idx_klienta]->adres_udp.sin6_addr),
+		       &(arg2->sin6_addr), sizeof(arg2->sin6_addr));
+	} else {
+		usun(klienci[idx_klienta]);
+		klienci[idx_klienta] = NULL;
+		return;
+	}
+	/* Wszystko się powiodło. Fajnie. */
+	/* Teraz typo wpisać port tam gdzie trzeba. */
+	klienci[idx_klienta]->port = malloc(MAX_ROZMIAR_PORTU);
+	if (klienci[idx_klienta]->port == NULL) {
+		usun(klienci[idx_klienta]);
+		debug("Na klienta %"SCNd32" zabrakło pamięci.",
+		      numer_kliencki);
+		klienci[idx_klienta] = NULL;
+		return;
+	}
+	/* Tu ma albo ipv6 albo ipv4 */
+	if (klienci[idx_klienta]->adres_udp.sin6_family == AF_INET6) {
+		if (sprintf(klienci[idx_klienta]->port, "%hu",
+			    klienci[idx_klienta]->adres_udp.sin6_port) < 1) {
+			usun(klienci[idx_klienta]);
+			debug("Nie udało się wypisać portu klienta %"SCNd32".",
+			      numer_kliencki);
+			klienci[idx_klienta] = NULL;
+		}
+	} else if (klienci[idx_klienta]->adres_udp.sin6_family == AF_INET) {
+		if (sprintf(klienci[idx_klienta]->port, "%hu",
+			    ((struct sockaddr_in *)
+			     &(klienci[idx_klienta]->adres_udp))->sin_port)
+		    < 0) {
+			usun(klienci[idx_klienta]);
+			klienci[idx_klienta] = NULL;
+			debug("Nie udało się wypisać portu klienta %"SCNd32".",
+			      numer_kliencki);
+		}
+	}
+}
+
+void dodaj_klientowi_dane(void *bufor, size_t ile_danych,
+			  struct sockaddr *adres, klient **const klienci,
+			  const size_t MAX_KLIENTOW)
+{
+	size_t idx_klienta = podaj_indeks_klienta(adres, klienci, MAX_KLIENTOW);
+	if (dodaj(klienci[idx_klienta]->kolejka, bufor, ile_danych) != 0) {
+		info("Klient %"SCNd32" dał za dużo danych, wywalamy go.",
+		     klienci[idx_klienta]->numer_kliencki);
+		usun(klienci[idx_klienta]);
+		klienci[idx_klienta] = NULL;
+	}
 }
