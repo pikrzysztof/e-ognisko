@@ -82,10 +82,10 @@ clean:
 
 remake: clean all
 
-debug: $(DEPENDS) $(ALL)
+debug: $(OBJECTS)
 	make debuglevel=1
 
-tags: $(ALL)
+tags: $(SOURCES)
 	etags *.[ch]
 
 tests:

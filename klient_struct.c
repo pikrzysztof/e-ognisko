@@ -7,7 +7,7 @@
 #include <sys/types.h>
 #include "klient_struct.h"
 #include "kolejka.h"
-char *SITREP(const klient *const);
+char *SITREP(klient *const);
 void usun(klient*);
 int dodaj_klienta(const evutil_socket_t, const in32_t,
 		  klient **const, const size_t);
@@ -92,8 +92,11 @@ static klient *zrob_klienta(const evutil_socket_t deskryptor)
 		return NULL;
 	k->adres = NULL;
 	k->port = NULL;
-	k->min_rozmiar_ostatnio = 0;
+	k->min_rozmiar_ostatnio = SIZE_MAX;
+	k->max_rozmiar_ostatnio = 0;
+	k->spodziewany_nr_paczki = 0;
 	k->kolejka = init_FIFO();
+	k->potwierdzil_numer = false;
 	if (k->kolejka == NULL) {
 		usun(k);
 		return NULL;
@@ -126,7 +129,7 @@ void usun(klient *const kto)
 	zwolnij(3, kto->adres, kto->port, kto);
 }
 
-char *SITREP(const klient *const o_kim)
+char *SITREP(klient *const o_kim)
 {
 	if (o_kim == NULL) {
 		debug("Ktos chce sitrep o NULLu.");
@@ -144,6 +147,8 @@ char *SITREP(const klient *const o_kim)
 		free(wynik);
 		wynik = NULL;
 	}
+	o_kim->min_rozmiar_ostatnio = SIZE_MAX;
+	o_kim->max_rozmiar_ostatnio = 0;
 	return wynik;
 }
 
@@ -232,6 +237,11 @@ void dodaj_adresy(const int32_t numer_kliencki, struct sockaddr *adres,
 		wywal(adres, klienci, MAX_KLIENTOW);
 		return;
 	}
+	if (klienci[idx_klienta]->potwierdzil_numer) {
+		usun(klienci[idx_klienta]);
+		klienci[idx_klienta] = NULL;
+	}
+	klienci[idx_klienta]->potwierdzil_numer = true;
 	klienci[idx_klienta]->adres_udp.sin6_family = adres->sa_family;
 	if (adres->sa_family == AF_INET) {
 		adr_kli =
@@ -279,6 +289,7 @@ void dodaj_adresy(const int32_t numer_kliencki, struct sockaddr *adres,
 			      numer_kliencki);
 		}
 	}
+	klienci[idx_klienta]->czas = clock();
 }
 
 void dodaj_klientowi_dane(void *bufor, size_t ile_danych,
@@ -286,10 +297,22 @@ void dodaj_klientowi_dane(void *bufor, size_t ile_danych,
 			  const size_t MAX_KLIENTOW)
 {
 	size_t idx_klienta = podaj_indeks_klienta(adres, klienci, MAX_KLIENTOW);
-	if (dodaj(klienci[idx_klienta]->kolejka, bufor, ile_danych) != 0) {
+	int32_t nr, ack, win;
+	if (idx_klienta >= MAX_KLIENTOW)
+		return;
+	wyskub_dane_z_naglowka(bufor, &nr, &ack, &win);
+	long long int nrLL = nr;
+	if (klienci[idx_klienta]->spodziewany_nr_paczki != nrLL) {
+		usun(klienci[idx_klienta]);
+		klienci[idx_klienta] = NULL;
+	}
+	if (!klienci[idx_klienta]->potwierdzil_numer ||
+	    dodaj(klienci[idx_klienta]->kolejka, bufor, ile_danych) != 0) {
 		info("Klient %"SCNd32" dał za dużo danych, wywalamy go.",
 		     klienci[idx_klienta]->numer_kliencki);
 		usun(klienci[idx_klienta]);
 		klienci[idx_klienta] = NULL;
 	}
+	klienci[idx_klienta]->czas = clock();
+	++(klienci[idx_klienta]->spodziewany_nr_paczki);
 }

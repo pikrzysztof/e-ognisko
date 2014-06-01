@@ -20,6 +20,17 @@ int16_t bezpiecznie_dodaj(const int16_t pierwszy, const int16_t drugi)
 	return wynik;
 }
 
+void odsmiecarka(klient **klienci, const size_t MAX_KLIENTOW)
+{
+	size_t i;
+	for (i = 0; i < MAX_KLIENTOW; ++i)
+		if (klienci[i] != NULL && klienci[i]->potwierdzil_numer
+		    && ((clock() - klienci[i]->czas) / CLOCKS_PER_SEC) >= 1) {
+			usun(klienci[i]);
+			klienci[i] = NULL;
+		}
+}
+
 bool jest_oznaczenie(const int argc, char *const *const argv,
 		     const char *const oznaczenie)
 {
@@ -70,7 +81,7 @@ int wstepne_ustalenia_z_klientem(const evutil_socket_t deskryptor_tcp,
 	}
 }
 
-static size_t zlicz_aktywnych_klientow(klient **const klienci,
+size_t zlicz_aktywnych_klientow(klient **const klienci,
 				       const size_t MAX_KLIENTOW)
 {
 	size_t i, wynik = 0;
@@ -139,7 +150,7 @@ static int wyslij_wiadomosc(char *wiadomosc, size_t rozmiar, klient *kli,
 	return 0;
 }
 
-int wyslij_wiadomosc_wszystkim(char *wiadomosc, klient **const klienci,
+void wyslij_wiadomosc_wszystkim(char *wiadomosc, klient **const klienci,
 			       const size_t MAX_KLIENTOW,
 			       const evutil_socket_t deskryptor)
 {
@@ -152,11 +163,10 @@ int wyslij_wiadomosc_wszystkim(char *wiadomosc, klient **const klienci,
 			continue;
 		if (wyslij_wiadomosc(wiadomosc, rozmiar_wiadomosci,
 				     klienci[i], deskryptor) == -1) {
+			usun(klienci[i]);
 			klienci[i] = NULL;
-			--wynik;
 		}
 	}
-	return wynik;
 }
 
 size_t podaj_indeks_klienta(struct sockaddr *adres,
@@ -177,8 +187,13 @@ static void keepalive(struct sockaddr *adres,
 		      klient **klienci, size_t MAX_KLIENTOW)
 {
 	size_t kto = podaj_indeks_klienta(adres, klienci, MAX_KLIENTOW);
-	if ((clock() - klienci[kto]->czas) / CLOCKS_PER_SEC < 1)
-		klienci[kto]->czas = clock();
+	if (kto >= MAX_KLIENTOW)
+		return;
+	klienci[kto]->czas = clock();
+	if (!(klienci[kto]->potwierdzil_numer)) {
+		usun(klienci[kto]);
+		klienci[kto] = NULL;
+	}
 }
 
 void wywal(struct sockaddr* adres, klient **klienci, size_t MAX_KLIENTOW)
@@ -208,9 +223,37 @@ static void zaktualizuj_klienta(char *bufor, size_t ile_danych,
 	}
 }
 
+static void wyslij_acka(struct sockaddr* adres, evutil_socket_t gniazdo_udp,
+		   klient **klienci, size_t MAX_KLIENTOW)
+{
+	size_t idx_klienta = podaj_indeks_klienta(adres, klienci, MAX_KLIENTOW);
+	char *odpowiedz;
+	size_t rozmiar_danych = 50;
+	int32_t okno;
+	if (idx_klienta >= MAX_KLIENTOW) {
+		info("Nie udało się znaleźć takiego klienta, co mi tu dajecie!");
+		return;
+	}
+	okno = daj_FIFO_SIZE() -
+		klienci[idx_klienta]->kolejka->liczba_zuzytych_bajtow;
+	odpowiedz = zrob_naglowek(ACK,
+				  klienci[idx_klienta]->spodziewany_nr_paczki,
+				  -1, okno, rozmiar_danych);
+	if (odpowiedz == NULL) {
+		info("Nie udało się wysłać ACK, bo zabrakło pamięci.");
+		return;
+	}
+	if (sendto(gniazdo_udp, odpowiedz, strlen(odpowiedz),
+		   MSG_NOSIGNAL | MSG_DONTWAIT, adres, sizeof(*adres)) <= 0) {
+		usun(klienci[idx_klienta]);
+		klienci[idx_klienta] = NULL;
+	}
+	free(odpowiedz);
+}
+
 void ogarnij_wiadomosc_udp(char *bufor, size_t ile_danych,
 			  struct sockaddr* adres, klient **klienci,
-			  size_t MAX_KLIENTOW)
+			   size_t MAX_KLIENTOW, evutil_socket_t gniazdo_udp)
 {
 	bufor[ile_danych] = '\0';
 	switch (rozpoznaj_naglowek(bufor)) {
@@ -221,6 +264,7 @@ void ogarnij_wiadomosc_udp(char *bufor, size_t ile_danych,
 	case UPLOAD:
 		dodaj_klientowi_dane(bufor, ile_danych, adres,
 					    klienci, MAX_KLIENTOW);
+		wyslij_acka(adres, gniazdo_udp, klienci, MAX_KLIENTOW);
 		break;
 	case RETRANSMIT:
 		retransmit(bufor, ile_danych, adres,

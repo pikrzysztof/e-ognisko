@@ -49,8 +49,7 @@ void udp_czytanie(evutil_socket_t gniazdo_udp, short flagi, void *nic)
 	ssize_t ile_danych = recvfrom(gniazdo_udp, bufor, MTU, MSG_DONTWAIT,
 				      &adres, &dlugosc_adresu);
 	if (ile_danych <= 0) {
-		free(bufor);
-		return;
+		syserr("Recv po udp się nie powiodło.");
 	}
 	if (ogarnij_wiadomosc_udp(bufor, ile_danych, &adres) != 0) {
 		info("Przyszła wiadomość i nie udało się jej obsłużyć.\n"
@@ -104,8 +103,7 @@ void wyslij_raporty(evutil_socket_t nic, short flagi, void* zero)
 		perror("Nie da się przygotować raportu o klientach.");
 		return;
 	}
-	liczba_klientow += wyslij_wiadomosc_wszystkim(raport, klienci,
-						      MAX_KLIENTOW, -1);
+	wyslij_wiadomosc_wszystkim(raport, klienci, MAX_KLIENTOW, -1);
 	info("Wysłałem raport %s", raport);
 	free(raport);
 }

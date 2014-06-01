@@ -3,20 +3,23 @@
 #include <time.h>
 #include "kolejka.h"
 #include <event2/event.h>
+#include <stdbool.h>
 typedef struct {
 	FIFO *kolejka;
 	char *adres;
 	char *port;
 	size_t min_rozmiar_ostatnio;
 	size_t max_rozmiar_ostatnio;
+	size_t spodziewany_nr_paczki;
 	evutil_socket_t deskryptor_tcp;
 	in_port_t sin_port;
 	struct sockaddr_in6 adres_udp;
 	int32_t numer_kliencki;
 	clock_t czas;
+	bool potwierdzil_numer;
 } klient;
 
-extern char *SITREP(const klient *const o_kim);
+extern char *SITREP(klient *const o_kim);
 
 extern void usun(klient *kto);
 

@@ -21,14 +21,14 @@ extern char* przygotuj_raport_grupowy(klient **const klienci,
 				      const size_t MAX_KLIENTOW);
 
 /* Jak deskryptor jest -1 to wysyla po UDP. */
-/* Wynik: do ilu klientów nie udało się dotrzeć. */
-extern int wyslij_wiadomosc_wszystkim(char *wiadomosc, klient **const klienci,
+extern voidwyslij_wiadomosc_wszystkim(char *wiadomosc, klient **const klienci,
 				      const size_t MAX_KLIENTOW,
 				      const evutil_socket_t deskryptor);
 
 extern void ogarnij_wiadomosc_udp(char *bufor, size_t ile_danych,
 				 struct sockaddr* adres, klient **klienci,
-				 size_t MAX_KLIENTOW);
+				  size_t MAX_KLIENTOW,
+				  evutil_socket_t gniazdo_udp);
 
 extern size_t podaj_indeks_klienta(struct sockaddr *adres,
 				   klient **const klienci,

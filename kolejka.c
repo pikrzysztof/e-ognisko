@@ -115,10 +115,8 @@ size_t daj_FIFO_SIZE()
 
 int dodaj(FIFO *fifo, void *dane, size_t rozmiar_danych)
 {
-	if (daj_FIFO_SIZE() - (fifo->liczba_zuzytych_bajtow)
-	    < rozmiar_danych) {
+	if (daj_FIFO_SIZE() - (fifo->liczba_zuzytych_bajtow) < rozmiar_danych)
 		return -1;
-	}
 	memcpy(((char *) (fifo->kolejka)) + fifo->liczba_zuzytych_bajtow,
 	       dane, rozmiar_danych);
 	fifo->liczba_zuzytych_bajtow += rozmiar_danych;
