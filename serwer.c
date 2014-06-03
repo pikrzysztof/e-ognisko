@@ -241,10 +241,7 @@ int main(int argc, char **argv)
 	    tcp_wysylanie_raportu == NULL ||
 	    udp_wysylanie_danych == NULL)
 		syserr("Nie udało się zrobić zdarzeń.");
-	if (event_add(tcp_czytanie, NULL) != 0)
-		syserr("Nie udało się dodać zdarzenia.");
-	if (event_add(wiadomosc_na_udp, NULL) != 0)
-		syserr("Nie udało się dodać zdarzenia.");
+	sprawdz_klientow();
 	if (event_base_dispatch(baza_zdarzen) != 0)
 		syserr("Nie udało się uruchomić zdarzeń.");
 	return EXIT_SUCCESS;

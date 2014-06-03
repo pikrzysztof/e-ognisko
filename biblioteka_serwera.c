@@ -47,16 +47,19 @@ bool jest_oznaczenie(const int argc, char *const *const argv,
 evutil_socket_t zrob_i_przygotuj_gniazdo(const char *const port,
 					 const int typ_gniazda)
 {
-	const evutil_socket_t gniazdo = socket(AF_INET6, typ_gniazda, 0);
+	const evutil_socket_t gniazdo = socket(AF_INET6, typ_gniazda,
+					       0);
 	struct sockaddr_in6 bindowanie;
+	memset(&bindowanie, 0, sizeof(bindowanie));
 	bindowanie.sin6_family = AF_INET6;
 	bindowanie.sin6_flowinfo = 0;
 	bindowanie.sin6_port = htons(atoi(port));
 	bindowanie.sin6_addr = in6addr_any;
-	if (bind(gniazdo, (struct sockaddr *) &bindowanie, sizeof(bindowanie))
-	    != 0) {
-		syserr("Nie można związać gniazda z adresem i portem.");
-	}
+	if (bind(gniazdo, (struct sockaddr *) &bindowanie,
+		 sizeof(bindowanie))
+	    != 0)
+		syserr("Nie można związać gniazda z adresem i "
+		       "portem.");
 	return gniazdo;
 }
 

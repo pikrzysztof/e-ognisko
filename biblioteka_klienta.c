@@ -1,9 +1,12 @@
 #include "biblioteka_klienta.h"
 
+size_t RETRANSMIT_LIMIT;
+
  /* Daje EOF jak jest EOF, liczba bajtow do wyslania, jak sie udalo, */
  /* BLAD_CZYTANIA jak jest blad. */
-static ssize_t zrob_paczke_danych(const size_t okno, const int32_t nr_paczki,
-			      char **napis)
+static ssize_t zrob_paczke_danych(const size_t okno,
+				  const int32_t nr_paczki,
+				  char **napis)
 {
 	static bool koniec_wejscia;
 	static int32_t ostatnio_wyslany_nr;
@@ -27,7 +30,8 @@ static ssize_t zrob_paczke_danych(const size_t okno, const int32_t nr_paczki,
 	if (koniec_wejscia) {
 		return EOF;
 	}
-	ostatnio_wyslany_pakiet = zrob_naglowek(UPLOAD, nr_paczki, -1, -1,
+	ostatnio_wyslany_pakiet = zrob_naglowek(UPLOAD, nr_paczki,
+						-1, -1,
 						MIN_ROZMIAR + okno);
 	tmp = malloc(okno + 5);
 	if (tmp == NULL || ostatnio_wyslany_pakiet  == NULL) {
@@ -137,40 +141,50 @@ int daj_dane_serwerowi(const int deskryptor,
 }
 
 int obsluz_data(const evutil_socket_t gniazdo,
-		const char *const naglowek,
+		const char *const wiadomosc, size_t ile_danych,
 		ssize_t *const ostatnio_odebrany_ack,
 		ssize_t *const ostatnio_odebrany_nr)
 {
 	int32_t nr, ack, win;
 	int paczka_danych_wynik;
+	ssize_t wynik;
 	rodzaj_naglowka r;
 	char *napis;
 	char *dane;
-	ssize_t ile_danych;
 	size_t UDP_MTU = 1600;
-	if (wyskub_dane_z_naglowka(naglowek, &nr, &ack, &win) == -1) {
+	if (sscanf(wiadomosc, "DATA %"SCNd32" %"SCNd32" %"SCNd32"\n",
+		   &nr, &ack, &win) != 3) {
 		return 0;
 	}
 	paczka_danych_wynik = zrob_paczke_danych(win, ack, &napis);
 	if (paczka_danych_wynik == 1) {
-		write(gniazdo, napis, strlen(napis));
+		wynik = write(gniazdo, napis, paczka_danych_wynik);
 		(*ostatnio_odebrany_ack) = ack;
+		free(napis);
+		if (wynik <= 0)
+			return -1;
 	} else if (paczka_danych_wynik == BLAD_CZYTANIA) {
+		free(napis);
 		return 0;
 	}
-	dane = malloc(UDP_MTU);
-	ile_danych = read(gniazdo, dane, UDP_MTU);
-	(*ostatnio_odebrany_nr) = nr;
-	if (ile_danych <= 0) {
+	dane = strchr(wiadomosc, '\n');
+	++dane;
+	if ((*ostatnio_odebrany_nr) + 1 >= nr - RETRANSMIT) {
+		dane = zrob_naglowek(RETRANSMIT,
+				     (*ostatnio_odebrany_nr) + 1, -1,
+				     -1, 0);
+		write(gniazdo, dane, strlen(dane));
 		free(dane);
-		return -1;
+	} else {
+		ile_danych = dane - wiadomosc;
+		(*ostatnio_odebrany_nr) = nr;
+		if (ile_danych <= 0) {
+			return -1;
+		}
+		if (write(STDOUT_FILENO, dane, ile_danych)
+		    != ile_danych)
+			syserr("Nie da się pisać na stdout.");
 	}
-	if (write(STDOUT_FILENO, dane, ile_danych) != ile_danych) {
-		perror("Nie mozna cos pisac na stdout!");
-		free(dane);
-		return 0;
-	}
-	free(dane);
 	return 0;
 }
 
@@ -197,4 +211,23 @@ int obsluz_ack(const evutil_socket_t gniazdo, const char *const naglowek,
 	free(wiadomosc);
 	return 0;
 
+}
+
+void ustaw_retransmit_limit(int argc, char *const *const argv)
+{
+	const char *const OZNACZENIE = "-X";
+	const size_t DOMYSLNIE = 10;
+	const char *const MIN = "0";
+	const char *const MAX = "40";
+	const char *const tmp = daj_opcje(OZNACZENIE, argc, argv);
+	if (tmp == NULL) {
+		RETRANSMIT_LIMIT = DOMYSLNIE;
+	} else {
+		if (jest_liczba_w_przedziale(MIN, MAX, tmp))
+			RETRANSMIT_LIMIT = atoi(tmp);
+		else
+			syserr("Źle podany parametr %s. "
+			       "Oczekiwano wartości między %s a %s.\n",
+			       OZNACZENIE, MIN, MAX);
+	}
 }

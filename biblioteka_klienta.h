@@ -28,7 +28,7 @@ extern int daj_dane_serwerowi(const int deskryptor,
 
 /* Obsluguje otrzymany pakiet DATA */
 extern int obsluz_data(const evutil_socket_t gniazdo,
-		       const char *const naglowek,
+		       const char *const wiadomosc, size_t ile_danych,
 		       ssize_t *const ostatnio_odebrany_ack,
 		       ssize_t *const ostatnio_odebrany_nr);
 
