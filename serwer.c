@@ -48,6 +48,8 @@ void zakolejkuj(struct event *zdarzenie, short flagi,
 		if (event_add(zdarzenie, czas) != 0) {
 			syserr(errmsg);
 		}
+	} else {
+		info("Zdarzenie %s jest już w kolejce.", errmsg);
 	}
 }
 
@@ -70,29 +72,25 @@ void sprawdz_klientow()
 			++aktywni;
 	}
 	if (aktywni > 0) {
-		zakolejkuj(udp_wysylanie_danych, EV_TIMEOUT,
+		zakolejkuj(udp_wysylanie_danych, EV_TIMEOUT & EV_PERSIST,
 			   &czestotliwosc_danych,
-			   "Nie udało się zakolejkować "
-			   "wysyłania po UDP.");
+			   "Nie udało się zakolejkować wysyłania po UDP.");
 	} else {
 		wykolejkuj(udp_wysylanie_danych,
-			   "Nie udało się wykolejkować wysyłania "
-			   "danych po UDP.");
+			 "Nie udało się wykolejkować wysyłania danych po UDP.");
 	}
 	if (polaczeni + aktywni > 0)
-		zakolejkuj(tcp_wysylanie_raportu, EV_TIMEOUT,
+		zakolejkuj(tcp_wysylanie_raportu, EV_TIMEOUT & EV_PERSIST,
 			   &czestotliwosc_raportow,
-			   "Nie udało się zakolejkować wysyłania"
-			   " raportów.");
+			   "Nie udało się zakolejkować wysyłania raportów.");
 	else {
 		wykolejkuj(tcp_wysylanie_raportu,
 			   "Nie udało się wykolejkować wysyłania "
 			   "raportów po TCP.");
 	}
 	if (polaczeni + aktywni < MAX_KLIENTOW) {
-		zakolejkuj(tcp_czytanie, EV_READ, NULL,
-			   "Nie udało się zakolejkować oczekiwania na"
-			   " połaczenie TCP.");
+		zakolejkuj(tcp_czytanie, EV_READ & EV_PERSIST, NULL,
+		   "Nie udało się zakolejkować oczekiwania na połaczenie TCP.");
 	} else {
 		wykolejkuj(tcp_czytanie, "Nie udało się wykolejkować "
 			   "przyjmowania nowych połączeń.");
