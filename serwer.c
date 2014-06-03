@@ -43,6 +43,7 @@ void zakolejkuj(struct event *zdarzenie, short flagi,
 		const struct timeval *const czas,
 		const char *const errmsg)
 {
+	info("Kolejkujemy %s", errmsg);
 	if (!event_pending(zdarzenie, flagi, NULL)) {
 		if (event_add(zdarzenie, czas) != 0) {
 			syserr(errmsg);
@@ -91,7 +92,7 @@ void sprawdz_klientow()
 	if (polaczeni + aktywni < MAX_KLIENTOW) {
 		zakolejkuj(tcp_czytanie, EV_READ, NULL,
 			   "Nie udało się zakolejkować oczekiwania na"
-			   " połaczneie TCP.");
+			   " połaczenie TCP.");
 	} else {
 		wykolejkuj(tcp_czytanie, "Nie udało się wykolejkować "
 			   "przyjmowania nowych połączeń.");
@@ -110,6 +111,7 @@ void wyslij_dane_udp(evutil_socket_t nic, short flagi,
 	const size_t ILE_DANYCH = 176 * TX_INTERVAL;
 	void *wynik = malloc(ILE_DANYCH);
 	size_t dlugosc_wyniku;
+	info("Wyślij dane UDP");
 	if (wynik == NULL)
 		syserr("Zabrakło pamięci.");
 	mixer(inputs, aktywni, wynik, &dlugosc_wyniku, TX_INTERVAL);
@@ -130,6 +132,7 @@ void udp_czytanie(evutil_socket_t gniazdo_udp, short flagi, void *nic)
 	ssize_t ile_danych = recvfrom(gniazdo_udp, bufor, MTU,
 				      MSG_DONTWAIT,
 				      &adres, &dlugosc_adresu);
+	info("UDP czytnaie");
 	if (ile_danych <= 0) {
 		syserr("Recv po udp się nie powiodło.");
 	}
@@ -146,6 +149,7 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 	struct sockaddr *addr;
 	evutil_socket_t deskryptor;
 	socklen_t dlugosc;
+	info("CZytaj i reaguj TCP");
 	assert(liczba_klientow < MAX_KLIENTOW);
 	deskryptor = accept(gniazdo_tcp, addr, &dlugosc);
 	if (deskryptor == -1) {
@@ -178,6 +182,7 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 void wyslij_raporty(evutil_socket_t nic, short flagi, void* zero)
 {
 	char *raport = przygotuj_raport_grupowy(klienci, MAX_KLIENTOW);
+	info("Wyślij raporty!");
 	if (raport == NULL) {
 		perror("Nie da się przygotować raportu o klientach.");
 		return;

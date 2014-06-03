@@ -149,7 +149,7 @@ int obsluz_data(const evutil_socket_t gniazdo,
 	int paczka_danych_wynik;
 	ssize_t wynik;
 	rodzaj_naglowka r;
-	char *napis;
+	char *napis = NULL;
 	char *dane;
 	size_t UDP_MTU = 1600;
 	if (sscanf(wiadomosc, "DATA %"SCNd32" %"SCNd32" %"SCNd32"\n",
@@ -161,6 +161,7 @@ int obsluz_data(const evutil_socket_t gniazdo,
 		wynik = write(gniazdo, napis, paczka_danych_wynik);
 		(*ostatnio_odebrany_ack) = ack;
 		free(napis);
+		napis = NULL;
 		if (wynik <= 0)
 			return -1;
 	} else if (paczka_danych_wynik == BLAD_CZYTANIA) {
@@ -179,12 +180,14 @@ int obsluz_data(const evutil_socket_t gniazdo,
 		ile_danych = dane - wiadomosc;
 		(*ostatnio_odebrany_nr) = nr;
 		if (ile_danych <= 0) {
+			free(napis);
 			return -1;
 		}
 		if (write(STDOUT_FILENO, dane, ile_danych)
 		    != ile_danych)
 			syserr("Nie da się pisać na stdout.");
 	}
+	free(napis);
 	return 0;
 }
 

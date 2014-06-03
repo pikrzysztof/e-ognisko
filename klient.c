@@ -29,6 +29,7 @@ void zle_uzywane(const char *const nazwa_programu)
 void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 			 void *baza_zdarzen)
 {
+	info("Czytaj i reaguj TCP");
 	if (flagi & EV_TIMEOUT || !(flagi & EV_READ)) {
 		perror("Problem z połączeniem TCP, długo nie"
 		       " ma wiadomości.");
@@ -73,8 +74,11 @@ void czytaj_i_reaguj_udp(evutil_socket_t gniazdo_udp, short flagi,
 		return;
 	}
 	naglowek = malloc(MTU);
+	if (naglowek == NULL)
+		syserr("Brakuje pamięci.");
 	ile_wczytane = recv(gniazdo_udp, naglowek, MTU, MSG_DONTWAIT);
 	if (ile_wczytane <= 0) {
+		free(naglowek);
 		skoncz_udp(potrzebne.baza_zdarzen,
 			   "Dziwny nagłówek UDP.");
 		return;
@@ -86,6 +90,7 @@ void czytaj_i_reaguj_udp(evutil_socket_t gniazdo_udp, short flagi,
 				&potrzebne.ostatnio_odebrany_nr) != 0)
 			skoncz_udp(potrzebne.baza_zdarzen,
 				   "Źle z DATA.");
+		free(naglowek);
 		break;
 	case ACK:
 		if (obsluz_ack(gniazdo_udp, naglowek,
@@ -93,10 +98,12 @@ void czytaj_i_reaguj_udp(evutil_socket_t gniazdo_udp, short flagi,
 			       &potrzebne.ostatnio_odebrany_nr) != 0)
 			skoncz_udp(potrzebne.baza_zdarzen,
 				   "Źle z ACK.");
+		free(naglowek);
 		break;
 	default:
 		skoncz_udp(potrzebne.baza_zdarzen,
 			   "Dziwny pakiet od serwera.");
+		free(naglowek);
 		break;
 	}
 }
