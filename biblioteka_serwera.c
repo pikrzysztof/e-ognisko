@@ -1,6 +1,8 @@
 #include "wspolne.h"
 #include "klient_struct.h"
 #include "biblioteka_serwera.h"
+#include "historia.h"
+#include "mikser.h"
 #include <time.h>
 #include <inttypes.h>
 #include <stdbool.h>
@@ -151,8 +153,7 @@ static int wyslij_wiadomosc(char *wiadomosc, size_t rozmiar, klient *kli,
 }
 
 void wyslij_wiadomosc_wszystkim(char *wiadomosc, klient **const klienci,
-			       const size_t MAX_KLIENTOW,
-			       const evutil_socket_t deskryptor)
+			       const size_t MAX_KLIENTOW)
 {
 	size_t i;
 	evutil_socket_t desk;
@@ -162,7 +163,7 @@ void wyslij_wiadomosc_wszystkim(char *wiadomosc, klient **const klienci,
 		if (klienci[i] == NULL)
 			continue;
 		if (wyslij_wiadomosc(wiadomosc, rozmiar_wiadomosci,
-				     klienci[i], deskryptor) == -1) {
+				     klienci[i], -1) == -1) {
 			usun(klienci[i]);
 			klienci[i] = NULL;
 		}
@@ -251,9 +252,66 @@ static void wyslij_acka(struct sockaddr* adres, evutil_socket_t gniazdo_udp,
 	free(odpowiedz);
 }
 
+static int wyslij_paczke(klient *komu, evutil_socket_t gniazdo_udp,
+			  int32_t numer_paczki, historia *hist)
+{
+	const size_t MTU = 2000;
+	wpis* wpis_historii;
+	size_t ile_wyslac;
+	char *tmp = zrob_naglowek(DATA, numer_paczki,
+				  komu->spodziewany_nr_paczki,
+				  daj_win(komu->kolejka), MTU);
+	wpis_historii = podaj_wpis(hist, numer_paczki);
+	if (wpis_historii == NULL) {
+		free(tmp);
+		info("Nie udało się znaleźć w historii numeru %"SCNd32".",
+		     numer_paczki);
+		return 1;
+	}
+	ile_wyslac = strlen(tmp) + wpis_historii->dlugosc_wiadomosci;
+	strncat(tmp, wpis_historii->wiadomosc,
+		wpis_historii->dlugosc_wiadomosci);
+	if (sendto(gniazdo_udp, tmp, ile_wyslac, MSG_DONTWAIT | MSG_NOSIGNAL,
+		   (struct sockaddr *) &(komu->adres_udp),
+		   sizeof(komu->adres_udp))
+	    != ile_wyslac) {
+		free(tmp);
+		return -1;
+	}
+	free(tmp);
+	return 0;
+}
+
+static void retransmit(char *bufor, size_t ile_danych, struct sockaddr* adres,
+		       klient **klienci, size_t MAX_KLIENTOW,
+		       evutil_socket_t gniazdo_udp, historia *hist)
+{
+	size_t idx_klienta = podaj_indeks_klienta(adres, klienci, MAX_KLIENTOW);
+	char *tmp;
+	size_t i, ostatnia_wiadomosc;
+	int32_t nr, win, ack;
+	if (hist->tablica_wpisow[hist->glowa] == NULL) {
+		info("Ktoś nas poprosił o retransmisje a "
+		     "my mamy pustą historię.");
+		return;
+	}
+	if (wyskub_dane_z_naglowka(bufor, &nr, &ack, &win) != 0)
+		return;
+	ostatnia_wiadomosc = hist->tablica_wpisow[hist->glowa]->numer_pakietu;
+	for (i = nr; i <= ostatnia_wiadomosc; ++i) {
+		if (wyslij_paczke(klienci[idx_klienta], gniazdo_udp, i, hist)
+		    == -1) {
+			usun(klienci[idx_klienta]);
+			klienci[idx_klienta] = NULL;
+			return;
+		}
+	}
+}
+
 void ogarnij_wiadomosc_udp(char *bufor, size_t ile_danych,
-			  struct sockaddr* adres, klient **klienci,
-			   size_t MAX_KLIENTOW, evutil_socket_t gniazdo_udp)
+			   struct sockaddr* adres, klient **klienci,
+			   size_t MAX_KLIENTOW, evutil_socket_t gniazdo_udp,
+			   historia *hist)
 {
 	bufor[ile_danych] = '\0';
 	switch (rozpoznaj_naglowek(bufor)) {
@@ -268,7 +326,7 @@ void ogarnij_wiadomosc_udp(char *bufor, size_t ile_danych,
 		break;
 	case RETRANSMIT:
 		retransmit(bufor, ile_danych, adres,
-				  klienci, MAX_KLIENTOW);
+			   klienci, MAX_KLIENTOW, gniazdo_udp, hist);
 		break;
 	case KEEPALIVE:
 		keepalive(adres, klienci, MAX_KLIENTOW);
@@ -276,5 +334,78 @@ void ogarnij_wiadomosc_udp(char *bufor, size_t ile_danych,
 	default:
 		wywal(adres, klienci, MAX_KLIENTOW);
 		break;
+	}
+}
+
+unsigned int daj_tx_interval(const int argc, char *const *const argv)
+{
+	const char *const OZNACZENIE = "-i";
+	const char *const MIN = "1";
+	const char *const MAX = "8";
+	const char *tmp = daj_opcje(OZNACZENIE, argc, argv);
+	const int DOMYSLNIE = 5;
+	if (tmp == NULL)
+		return DOMYSLNIE;
+	if (jest_liczba_w_przedziale(MIN, MAX, tmp))
+		return atoi(tmp);
+	else
+		syserr("%s powinno mieć wartości pomiędzy %s a %s.",
+		       OZNACZENIE, MIN, MAX);
+}
+
+struct mixer_input* przygotuj_dane_mikserowi(klient **klienci,
+				    const size_t MAX_LICZBA_KLIENTOW)
+{
+	size_t i, aktywni;
+	struct mixer_input *inputs = malloc(MAX_LICZBA_KLIENTOW *
+				      sizeof(struct mixer_input));
+	if (inputs == NULL)
+		syserr("Nie można zrobić tablicy dla miksera.");
+	for (i = 0, aktywni = 0; i < MAX_LICZBA_KLIENTOW; ++i)
+		if (klienci[i] != NULL &&
+		    klienci[i]->potwierdzil_numer &&
+		    klienci[i]->kolejka->stan == ACTIVE) {
+			inputs[aktywni].data =
+				klienci[i]->kolejka->kolejka;
+			inputs[aktywni].len =
+			   klienci[i]->kolejka->liczba_zuzytych_bajtow;
+			++aktywni;
+		}
+	return inputs;
+}
+
+void wyslij_wiadomosci(const void *const dane, const size_t ile_danych,
+		       const evutil_socket_t gniazdo_udp,
+		       klient **const klienci,
+		       const size_t MAX_KLIENTOW,
+		       int32_t numer_paczki)
+{
+	size_t i, rozmiar_paczki;
+	char *tmp;
+	const size_t MTU = 2000;
+	for (i = 0; i < MAX_KLIENTOW; ++i) {
+		if (klienci[i] == NULL ||
+		    !klienci[i]->potwierdzil_numer)
+			continue;
+		tmp = zrob_naglowek(DATA, numer_paczki,
+				    klienci[i]->spodziewany_nr_paczki,
+				    daj_win(klienci[i]->kolejka),
+				    MTU);
+		if (tmp == NULL)
+			syserr("Zabrakło pamięci.");
+		rozmiar_paczki = strlen(tmp) + ile_danych;
+		strncat(tmp, dane, ile_danych);
+		if (sendto(gniazdo_udp, tmp, rozmiar_paczki,
+			   MSG_NOSIGNAL | MSG_DONTWAIT,
+			  (struct sockaddr *) &(klienci[i]->adres_udp),
+			   sizeof(klienci[i]->adres_udp))
+		    != rozmiar_paczki) {
+			info("Nie udało się wysłać do klienta %"
+			       SCNd32", więc go usuwamy.",
+			     klienci[i]->numer_kliencki);
+				usun(klienci[i]);
+			klienci[i] = NULL;
+		}
+		free(tmp);
 	}
 }

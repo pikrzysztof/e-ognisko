@@ -79,7 +79,7 @@ extern ssize_t dopisz_na_koncu(char *const poczatek,
 
 /* Dodaje drugi napis na koncu pierwszego, konczy drugi '\0' */
 extern void konkatenacja(char *const pierwszy, const char *const drugi,
-			   size_t dlugosc_drugiego);
+			 size_t dlugosc_drugiego);
 
 /* Czyta z deskryptora dopóki nie dostanie końca linii */
 /* albo nie skończy się bufor. */

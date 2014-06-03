@@ -10,6 +10,8 @@
 #include "wspolne.h"
 #include "bufor_wychodzacych.h"
 #include "klient_struct.h"
+#include "mikser.h"
+#include "historia.h"
 #include <sys/socket.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -24,21 +26,100 @@ const bool DEBUG = true;
 const bool DEBUG = false;
 #endif
 
-typedef struct {
-	size_t rozmiar_danych;
-	size_t numer_paczki;
-	void *dane;
-} wiadomosc;
-
 const struct timeval czestotliwosc_raportow = {1, 0};
+struct timeval czestotliwosc_danych;
 const size_t MAX_KLIENTOW = 20;
 struct event *tcp_czytanie;
 struct event *wiadomosc_na_udp;
 struct event *tcp_wysylanie_raportu;
+struct event *udp_wysylanie_danych;
 struct event_base *baza_zdarzen;
 size_t liczba_klientow = 0;
 klient **klienci;
-wiadomosc *historia;
+historia *hist;
+unsigned long TX_INTERVAL;
+
+void zakolejkuj(struct event *zdarzenie, short flagi,
+		const struct timeval *const czas,
+		const char *const errmsg)
+{
+	if (!event_pending(zdarzenie, flagi, NULL)) {
+		if (event_add(zdarzenie, czas) != 0) {
+			syserr(errmsg);
+		}
+	}
+}
+
+void wykolejkuj(struct event *zdarzenie, const char *const errmsg)
+{
+	if (event_del(zdarzenie) != 0)
+		syserr(errmsg);
+}
+
+void sprawdz_klientow()
+{
+	size_t i, polaczeni, aktywni;
+	for (i = 0, polaczeni = 0, aktywni = 0; i < MAX_KLIENTOW;
+	     ++i) {
+		if (klienci[i] == NULL)
+			continue;
+		if (klienci[i]->potwierdzil_numer)
+			++polaczeni;
+		else
+			++aktywni;
+	}
+	if (aktywni > 0) {
+		zakolejkuj(udp_wysylanie_danych, EV_TIMEOUT,
+			   &czestotliwosc_danych,
+			   "Nie udało się zakolejkować "
+			   "wysyłania po UDP.");
+	} else {
+		wykolejkuj(udp_wysylanie_danych,
+			   "Nie udało się wykolejkować wysyłania "
+			   "danych po UDP.");
+	}
+	if (polaczeni + aktywni > 0)
+		zakolejkuj(tcp_wysylanie_raportu, EV_TIMEOUT,
+			   &czestotliwosc_raportow,
+			   "Nie udało się zakolejkować wysyłania"
+			   " raportów.");
+	else {
+		wykolejkuj(tcp_wysylanie_raportu,
+			   "Nie udało się wykolejkować wysyłania "
+			   "raportów po TCP.");
+	}
+	if (polaczeni + aktywni < MAX_KLIENTOW) {
+		zakolejkuj(tcp_czytanie, EV_READ, NULL,
+			   "Nie udało się zakolejkować oczekiwania na"
+			   " połaczneie TCP.");
+	} else {
+		wykolejkuj(tcp_czytanie, "Nie udało się wykolejkować "
+			   "przyjmowania nowych połączeń.");
+	}
+	odsmiecarka(klienci, MAX_KLIENTOW);
+}
+
+void wyslij_dane_udp(evutil_socket_t nic, short flagi,
+		     void *gniazdo_udp)
+{
+	static int32_t numer_paczki;
+	struct mixer_input *inputs = przygotuj_dane_mikserowi(klienci,
+							 MAX_KLIENTOW);
+	size_t aktywni = zlicz_aktywnych_klientow(klienci,
+						  MAX_KLIENTOW);
+	const size_t ILE_DANYCH = 176 * TX_INTERVAL;
+	void *wynik = malloc(ILE_DANYCH);
+	size_t dlugosc_wyniku;
+	if (wynik == NULL)
+		syserr("Zabrakło pamięci.");
+	mixer(inputs, aktywni, wynik, &dlugosc_wyniku, TX_INTERVAL);
+	odejmij_ludziom(klienci, inputs, MAX_KLIENTOW);
+	wyslij_wiadomosci(wynik, dlugosc_wyniku,
+		    *((evutil_socket_t *) gniazdo_udp), klienci,
+		    MAX_KLIENTOW, numer_paczki);
+	dodaj_wpis(hist, numer_paczki, wynik, dlugosc_wyniku);
+	++numer_paczki;
+}
 
 void udp_czytanie(evutil_socket_t gniazdo_udp, short flagi, void *nic)
 {
@@ -46,19 +127,16 @@ void udp_czytanie(evutil_socket_t gniazdo_udp, short flagi, void *nic)
 	void *bufor = malloc(MTU);
 	struct sockaddr adres;
 	socklen_t dlugosc_adresu;
-	ssize_t ile_danych = recvfrom(gniazdo_udp, bufor, MTU, MSG_DONTWAIT,
+	ssize_t ile_danych = recvfrom(gniazdo_udp, bufor, MTU,
+				      MSG_DONTWAIT,
 				      &adres, &dlugosc_adresu);
 	if (ile_danych <= 0) {
 		syserr("Recv po udp się nie powiodło.");
 	}
-	if (ogarnij_wiadomosc_udp(bufor, ile_danych, &adres) != 0) {
-		info("Przyszła wiadomość i nie udało się jej obsłużyć.\n"
-		     "Treść wiadomości: ");
-		if (write(STDERR_FILENO, bufor, ile_danych) < 0) {
-			info("Nie udało się pokazać wiadmości.");
-		}
-	}
+	ogarnij_wiadomosc_udp(bufor, ile_danych, &adres, klienci,
+			      MAX_KLIENTOW, gniazdo_udp, hist);
 	free(bufor);
+	sprawdz_klientow();
 }
 
 void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
@@ -94,6 +172,7 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 			syserr("Nie można wysyłać raportów!");
 		}
 	}
+	sprawdz_klientow();
 }
 
 void wyslij_raporty(evutil_socket_t nic, short flagi, void* zero)
@@ -103,9 +182,10 @@ void wyslij_raporty(evutil_socket_t nic, short flagi, void* zero)
 		perror("Nie da się przygotować raportu o klientach.");
 		return;
 	}
-	wyslij_wiadomosc_wszystkim(raport, klienci, MAX_KLIENTOW, -1);
+	wyslij_wiadomosc_wszystkim(raport, klienci, MAX_KLIENTOW);
 	info("Wysłałem raport %s", raport);
 	free(raport);
+	sprawdz_klientow();
 }
 
 int main(int argc, char **argv)
@@ -116,7 +196,7 @@ int main(int argc, char **argv)
 	size_t i;
 	const int MAX_DLUGOSC_KOLEJKI = MAX_KLIENTOW;
 	klienci = malloc(sizeof(klient *) * MAX_KLIENTOW);
-	historia = malloc(sizeof(wiadomosc) * )
+	hist = historia_init(argc, argv);
 	if (klienci == NULL)
 		syserr("Nie mozna zrobic tablicy klientow.");
 	ustaw_rozmiar_fifo(argc, argv);
@@ -128,6 +208,9 @@ int main(int argc, char **argv)
 	else
 		if (!wlasciwy_port(port))
 			fatal("Jakiś lewy port.");
+	TX_INTERVAL = daj_tx_interval(argc, argv);
+	czestotliwosc_danych.tv_sec = 0;
+	czestotliwosc_danych.tv_usec = TX_INTERVAL * 1000;
 	gniazdo_tcp = zrob_i_przygotuj_gniazdo(port, SOCK_STREAM);
 	gniazdo_udp = zrob_i_przygotuj_gniazdo(port, SOCK_DGRAM);
 	for (i = 0; i < MAX_KLIENTOW; ++i) {
@@ -151,5 +234,18 @@ int main(int argc, char **argv)
 	wiadomosc_na_udp = event_new(baza_zdarzen, gniazdo_udp,
 				 EV_READ & EV_PERSIST,
 				 udp_czytanie, NULL);
+	udp_wysylanie_danych = event_new(baza_zdarzen, -1,
+				       EV_PERSIST & EV_TIMEOUT,
+				       wyslij_dane_udp, &gniazdo_udp);
+	if (wyslij_dane_udp == NULL || tcp_czytanie == NULL ||
+	    tcp_wysylanie_raportu == NULL ||
+	    udp_wysylanie_danych == NULL)
+		syserr("Nie udało się zrobić zdarzeń.");
+	if (event_add(tcp_czytanie, NULL) != 0)
+		syserr("Nie udało się dodać zdarzenia.");
+	if (event_add(wiadomosc_na_udp, NULL) != 0)
+		syserr("Nie udało się dodać zdarzenia.");
+	if (event_base_dispatch(baza_zdarzen) != 0)
+		syserr("Nie udało się uruchomić zdarzeń.");
 	return EXIT_SUCCESS;
 }

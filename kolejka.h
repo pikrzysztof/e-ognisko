@@ -26,7 +26,8 @@ typedef struct {
 /* rzuca -1 jak cos sie nie zgadza, 0 jak sie udaje. */
 extern void ustaw_wodnego_Marka(FIFO *const fifo);
 
-extern void init_wodnego_Marka(const int argc, char *const *const argv);
+extern void init_wodnego_Marka(const int argc,
+			       char *const *const argv);
 
 /* Ustawia rozmiar fifo. */
 /* Daje -1 jak sie cos nie zgadza, 0 jak sie uda. */
@@ -40,4 +41,5 @@ extern size_t daj_FIFO_SIZE();
 
 extern int dodaj(FIFO *fifo, void *dane, size_t rozmiar_danych);
 
+extern int32_t daj_win(FIFO *fifo);
 #endif

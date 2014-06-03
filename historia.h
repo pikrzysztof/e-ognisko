@@ -12,11 +12,11 @@ typedef struct {
 	size_t glowa;
 } historia;
 
-extern historia* historia_init(const size_t dlugosc_historii);
+extern historia* historia_init(const int argc, char *const *const argv);
 
 extern wpis* podaj_wpis(const historia *const hist, const size_t numer_wpisuj);
 
-extern void* dodaj_wpis(historia *const hist, const size_t numer_wpisu,
-			const void *const dane, const size_t rozmiar_danych);
+extern void dodaj_wpis(historia *const hist, const size_t numer_wpisu,
+		       const void *const dane, const size_t rozmiar_danych);
 
 #endif

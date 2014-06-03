@@ -8,8 +8,9 @@ struct mixer_input {
 	size_t consumed;
 };
 
-extern void mixer(struct mixer_input *inputs, size_t n, void *output_buf,
-		  size_t output_size, unsigned long tx_interval_ms);
+extern void mixer(struct mixer_input *inputs, size_t n,
+		  void *output_buf, size_t *output_size,
+		  unsigned long tx_interval_ms);
 
 
 #endif

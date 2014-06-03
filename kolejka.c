@@ -6,6 +6,8 @@
 /* kodowanie UTF-8 */
 
 #include "kolejka.h"
+#include "klient_struct.h"
+#include "mikser.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -13,6 +15,7 @@
 #include <inttypes.h>
 #include "wspolne.h"
 #include "err.h"
+#include <assert.h>
 
 size_t FIFO_SIZE;
 size_t FIFO_LOW_WATERMARK;
@@ -121,4 +124,35 @@ int dodaj(FIFO *fifo, void *dane, size_t rozmiar_danych)
 	       dane, rozmiar_danych);
 	fifo->liczba_zuzytych_bajtow += rozmiar_danych;
 	return 0;
+}
+
+int32_t daj_win(FIFO *fifo)
+{
+	return FIFO_SIZE - fifo->liczba_zuzytych_bajtow;
+}
+
+static usun_poczatek(FIFO *const fifo, const size_t ile)
+{
+	assert(fifo->liczba_zuzytych_bajtow >= ile);
+	fifo->liczba_zuzytych_bajtow -= ile;
+	memmove(fifo->kolejka, fifo->kolejka + ile,
+		fifo->liczba_zuzytych_bajtow);
+	ustaw_wodnego_Marka(fifo);
+}
+
+
+void odejmij_ludziom(klient **klienci, struct mixer_input *inputs,
+		     const size_t MAX_KLIENTOW)
+{
+	size_t i, aktywni;
+	for (i = 0, aktywni = 0; i < MAX_KLIENTOW; ++i) {
+		if (klienci[i] == NULL ||
+		    !klienci[i]->potwierdzil_numer ||
+		    klienci[i]->kolejka->stan != ACTIVE) {
+			continue;
+		}
+		usun_poczatek(klienci[i]->kolejka,
+			      inputs[aktywni].consumed);
+		++aktywni;
+	}
 }
