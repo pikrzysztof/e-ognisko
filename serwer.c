@@ -72,7 +72,7 @@ void sprawdz_klientow()
 			++aktywni;
 	}
 	if (aktywni > 0) {
-		zakolejkuj(udp_wysylanie_danych, EV_TIMEOUT & EV_PERSIST,
+		zakolejkuj(udp_wysylanie_danych, EV_TIMEOUT | EV_PERSIST,
 			   &czestotliwosc_danych,
 			   "Nie udało się zakolejkować wysyłania po UDP.");
 	} else {
@@ -80,7 +80,7 @@ void sprawdz_klientow()
 			 "Nie udało się wykolejkować wysyłania danych po UDP.");
 	}
 	if (polaczeni + aktywni > 0)
-		zakolejkuj(tcp_wysylanie_raportu, EV_TIMEOUT & EV_PERSIST,
+		zakolejkuj(tcp_wysylanie_raportu, EV_TIMEOUT | EV_PERSIST,
 			   &czestotliwosc_raportow,
 			   "Nie udało się zakolejkować wysyłania raportów.");
 	else {
@@ -89,7 +89,7 @@ void sprawdz_klientow()
 			   "raportów po TCP.");
 	}
 	if (polaczeni + aktywni < MAX_KLIENTOW) {
-		zakolejkuj(tcp_czytanie, EV_READ & EV_PERSIST, NULL,
+		zakolejkuj(tcp_czytanie, EV_READ | EV_PERSIST, NULL,
 		   "Nie udało się zakolejkować oczekiwania na połaczenie TCP.");
 	} else {
 		wykolejkuj(tcp_czytanie, "Nie udało się wykolejkować "
@@ -229,16 +229,16 @@ int main(int argc, char **argv)
 	if (listen(gniazdo_tcp, MAX_DLUGOSC_KOLEJKI) != 0)
 		syserr("Nie można słuchać.");
 	tcp_czytanie = event_new(baza_zdarzen, gniazdo_tcp,
-				 EV_READ & EV_PERSIST,
+				 EV_READ | EV_PERSIST,
 				 czytaj_i_reaguj_tcp, NULL);
 	tcp_wysylanie_raportu = event_new(baza_zdarzen, -1,
-					  EV_TIMEOUT & EV_PERSIST,
+					  EV_TIMEOUT | EV_PERSIST,
 					  wyslij_raporty, NULL);
 	wiadomosc_na_udp = event_new(baza_zdarzen, gniazdo_udp,
-				 EV_READ & EV_PERSIST,
+				 EV_READ | EV_PERSIST,
 				 udp_czytanie, NULL);
 	udp_wysylanie_danych = event_new(baza_zdarzen, -1,
-				       EV_PERSIST & EV_TIMEOUT,
+				       EV_PERSIST | EV_TIMEOUT,
 				       wyslij_dane_udp, &gniazdo_udp);
 	if (wyslij_dane_udp == NULL || tcp_czytanie == NULL ||
 	    tcp_wysylanie_raportu == NULL ||
