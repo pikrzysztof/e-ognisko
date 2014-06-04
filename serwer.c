@@ -20,6 +20,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <unistd.h>
+
 #ifndef NDEBUG
 const bool DEBUG = true;
 #else
@@ -34,22 +35,22 @@ struct event *wiadomosc_na_udp;
 struct event *tcp_wysylanie_raportu;
 struct event *udp_wysylanie_danych;
 struct event_base *baza_zdarzen;
-size_t liczba_klientow = 0;
 klient **klienci;
 historia *hist;
 unsigned long TX_INTERVAL;
+int32_t numer_kliencki = 0;
 
 void zakolejkuj(struct event *zdarzenie, short flagi,
 		const struct timeval *const czas,
 		const char *const errmsg)
 {
-	info("Kolejkujemy %s", errmsg);
+	/* info("Kolejkujemy %s", errmsg); */
 	if (!event_pending(zdarzenie, flagi, NULL)) {
 		if (event_add(zdarzenie, czas) != 0) {
 			syserr(errmsg);
 		}
 	} else {
-		info("Zdarzenie %s jest już w kolejce.", errmsg);
+		/* info("Zdarzenie %s jest już w kolejce.", errmsg); */
 	}
 }
 
@@ -67,23 +68,27 @@ void sprawdz_klientow()
 		if (klienci[i] == NULL)
 			continue;
 		if (klienci[i]->potwierdzil_numer)
-			++polaczeni;
-		else
 			++aktywni;
+		else
+			++polaczeni;
 	}
 	if (aktywni > 0) {
 		zakolejkuj(udp_wysylanie_danych, EV_TIMEOUT | EV_PERSIST,
 			   &czestotliwosc_danych,
 			   "Nie udało się zakolejkować wysyłania po UDP.");
+		info("HEJHO kolejkujemy");
 	} else {
 		wykolejkuj(udp_wysylanie_danych,
 			 "Nie udało się wykolejkować wysyłania danych po UDP.");
+		info("WYWALAM");
 	}
-	if (polaczeni + aktywni > 0)
+	if (polaczeni + aktywni > 0) {
 		zakolejkuj(tcp_wysylanie_raportu, EV_TIMEOUT | EV_PERSIST,
 			   &czestotliwosc_raportow,
 			   "Nie udało się zakolejkować wysyłania raportów.");
-	else {
+		zakolejkuj(wiadomosc_na_udp, EV_READ | EV_PERSIST, NULL,
+			   "Nie udało się zakolejkować czytania po UDP.");
+	} else {
 		wykolejkuj(tcp_wysylanie_raportu,
 			   "Nie udało się wykolejkować wysyłania "
 			   "raportów po TCP.");
@@ -103,22 +108,25 @@ void wyslij_dane_udp(evutil_socket_t nic, short flagi,
 {
 	static int32_t numer_paczki;
 	struct mixer_input *inputs = przygotuj_dane_mikserowi(klienci,
-							 MAX_KLIENTOW);
-	size_t aktywni = zlicz_aktywnych_klientow(klienci,
-						  MAX_KLIENTOW);
+							      MAX_KLIENTOW);
+	size_t aktywni = zlicz_aktywnych_klientow(klienci, MAX_KLIENTOW);
 	const size_t ILE_DANYCH = 176 * TX_INTERVAL;
 	void *wynik = malloc(ILE_DANYCH);
-	size_t dlugosc_wyniku;
+	size_t dlugosc_wyniku = ILE_DANYCH;
 	info("Wyślij dane UDP");
 	if (wynik == NULL)
 		syserr("Zabrakło pamięci.");
 	mixer(inputs, aktywni, wynik, &dlugosc_wyniku, TX_INTERVAL);
 	odejmij_ludziom(klienci, inputs, MAX_KLIENTOW);
 	wyslij_wiadomosci(wynik, dlugosc_wyniku,
-		    *((evutil_socket_t *) gniazdo_udp), klienci,
-		    MAX_KLIENTOW, numer_paczki);
+			  *((evutil_socket_t *) gniazdo_udp), klienci,
+			  MAX_KLIENTOW, numer_paczki);
 	dodaj_wpis(hist, numer_paczki, wynik, dlugosc_wyniku);
 	++numer_paczki;
+	free(wynik);
+	free(inputs);
+	info("wyslij dane udp sprawdz klientow");
+	sprawdz_klientow();
 }
 
 void udp_czytanie(evutil_socket_t gniazdo_udp, short flagi, void *nic)
@@ -126,54 +134,53 @@ void udp_czytanie(evutil_socket_t gniazdo_udp, short flagi, void *nic)
 	const size_t MTU = 2000;
 	void *bufor = malloc(MTU);
 	struct sockaddr adres;
-	socklen_t dlugosc_adresu;
+	socklen_t dlugosc_adresu = sizeof(adres);
 	ssize_t ile_danych = recvfrom(gniazdo_udp, bufor, MTU,
 				      MSG_DONTWAIT,
 				      &adres, &dlugosc_adresu);
-	info("UDP czytnaie");
+	/* info("UDP czytnaie"); */
 	if (ile_danych <= 0) {
 		syserr("Recv po udp się nie powiodło.");
 	}
 	ogarnij_wiadomosc_udp(bufor, ile_danych, &adres, klienci,
 			      MAX_KLIENTOW, gniazdo_udp, hist);
 	free(bufor);
+	info("udp czytanie spr klientow");
 	sprawdz_klientow();
 }
 
-void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
-			 void *dane)
+void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi, void *nic)
 {
-	int32_t *numer_kliencki = (int32_t *) dane;
-	struct sockaddr *addr;
+	struct sockaddr addr;
 	evutil_socket_t deskryptor;
-	socklen_t dlugosc;
+	socklen_t dlugosc = sizeof(addr);
 	info("CZytaj i reaguj TCP");
-	assert(liczba_klientow < MAX_KLIENTOW);
-	deskryptor = accept(gniazdo_tcp, addr, &dlugosc);
+	/* assert(liczba_klientow < MAX_KLIENTOW); */
+	deskryptor = accept(gniazdo_tcp, &addr, &dlugosc);
 	if (deskryptor == -1) {
 		info("Błąd w przyjmowaniu połączenia.");
 	}
-	if (wstepne_ustalenia_z_klientem(deskryptor, *numer_kliencki,
+	if (wstepne_ustalenia_z_klientem(deskryptor, numer_kliencki,
 					 klienci, MAX_KLIENTOW) == 0) {
-		++liczba_klientow;
 	}
-	++(*numer_kliencki);
-	if (liczba_klientow < MAX_KLIENTOW) {
-		if (event_add(tcp_czytanie, NULL) != 0) {
-			perror("Nie udało się ustawić czekania na "
-			       "kolejne połaczenie TCP.");
-			if (liczba_klientow == 0) {
-				syserr("Nie udało się ustawić czekania "
-				       "na klientów to kończę.");
-			}
-		}
-	}
-	if (liczba_klientow == 1) {
-		if (event_add(tcp_wysylanie_raportu, &czestotliwosc_raportow)
-		    != 0) {
-			syserr("Nie można wysyłać raportów!");
-		}
-	}
+	++numer_kliencki;
+	/* if (liczba_klientow < MAX_KLIENTOW) { */
+	/* 	if (event_add(tcp_czytanie, NULL) != 0) { */
+	/* 		perror("Nie udało się ustawić czekania na " */
+	/* 		       "kolejne połaczenie TCP."); */
+	/* 		if (liczba_klientow == 0) { */
+	/* 			syserr("Nie udało się ustawić czekania " */
+	/* 			       "na klientów to kończę."); */
+	/* 		} */
+	/* 	} */
+	/* } */
+	/* if (liczba_klientow == 1) { */
+	/* 	if (event_add(tcp_wysylanie_raportu, &czestotliwosc_raportow) */
+	/* 	    != 0) { */
+	/* 		syserr("Nie można wysyłać raportów!"); */
+	/* 	} */
+	/* } */
+	info("czytaj i reaguj tcp spr klientow");
 	sprawdz_klientow();
 }
 
@@ -188,6 +195,7 @@ void wyslij_raporty(evutil_socket_t nic, short flagi, void* zero)
 	wyslij_wiadomosc_wszystkim(raport, klienci, MAX_KLIENTOW);
 	info("Wysłałem raport %s", raport);
 	free(raport);
+	info("wyslij raporty spr klientow");
 	sprawdz_klientow();
 }
 
@@ -235,11 +243,11 @@ int main(int argc, char **argv)
 					  EV_TIMEOUT | EV_PERSIST,
 					  wyslij_raporty, NULL);
 	wiadomosc_na_udp = event_new(baza_zdarzen, gniazdo_udp,
-				 EV_READ | EV_PERSIST,
-				 udp_czytanie, NULL);
+				     EV_READ | EV_PERSIST,
+				     udp_czytanie, NULL);
 	udp_wysylanie_danych = event_new(baza_zdarzen, -1,
-				       EV_PERSIST | EV_TIMEOUT,
-				       wyslij_dane_udp, &gniazdo_udp);
+					 EV_PERSIST | EV_TIMEOUT,
+					 wyslij_dane_udp, &gniazdo_udp);
 	if (wyslij_dane_udp == NULL || tcp_czytanie == NULL ||
 	    tcp_wysylanie_raportu == NULL ||
 	    udp_wysylanie_danych == NULL)

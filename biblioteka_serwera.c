@@ -47,9 +47,12 @@ bool jest_oznaczenie(const int argc, char *const *const argv,
 evutil_socket_t zrob_i_przygotuj_gniazdo(const char *const port,
 					 const int typ_gniazda)
 {
-	const evutil_socket_t gniazdo = socket(AF_INET6, typ_gniazda,
-					       0);
+	const evutil_socket_t gniazdo = socket(AF_INET6, typ_gniazda, 0);
 	struct sockaddr_in6 bindowanie;
+	if (gniazdo == -1)
+		syserr("Nie można zrobić gniazda.");
+	if (evutil_make_listen_socket_reuseable(gniazdo) != 0)
+		syserr("Nie można zrobić gniazda.");
 	memset(&bindowanie, 0, sizeof(bindowanie));
 	bindowanie.sin6_family = AF_INET6;
 	bindowanie.sin6_flowinfo = 0;
@@ -135,8 +138,8 @@ static int wyslij_wiadomosc(char *wiadomosc, size_t rozmiar, klient *kli,
 	if (kli == NULL)
 		return 0;
 	if (deskryptor == -1) {
-		if (write(kli->deskryptor_tcp, wiadomosc, rozmiar) != rozmiar) {
-			usun(kli);
+		if (send(kli->deskryptor_tcp, wiadomosc, rozmiar,
+			 MSG_NOSIGNAL | MSG_DONTWAIT) != rozmiar) {
 			info("Usunęliśmy klienta bo słabo działał.");
 			return -1;
 		}
@@ -147,7 +150,7 @@ static int wyslij_wiadomosc(char *wiadomosc, size_t rozmiar, klient *kli,
 			   MSG_DONTWAIT | MSG_NOSIGNAL,
 			   (struct sockaddr *) &(kli->adres_udp),
 			   sizeof(struct sockaddr_in6)) != rozmiar) {
-			usun(kli);
+			/* usun(kli); */
 			info("Usunęliśmy klienta bo słabo działał.");
 			return -1;
 		}
@@ -191,9 +194,16 @@ static void keepalive(struct sockaddr *adres,
 		      klient **klienci, size_t MAX_KLIENTOW)
 {
 	size_t kto = podaj_indeks_klienta(adres, klienci, MAX_KLIENTOW);
-	if (kto >= MAX_KLIENTOW)
+	if (kto >= MAX_KLIENTOW) {
+		info("ktoś dziwny wysłał keepalive");
 		return;
+	}
 	klienci[kto]->czas = clock();
+	if (klienci[kto]->potwierdzil_numer)
+		info("potwierdzil");
+	else
+		info("nie potwierdzil");
+	info("%i wysłał keepalive.", klienci[kto]->numer_kliencki);
 	if (!(klienci[kto]->potwierdzil_numer)) {
 		usun(klienci[kto]);
 		klienci[kto] = NULL;
@@ -218,8 +228,7 @@ static void zaktualizuj_klienta(char *bufor, size_t ile_danych,
 {
 	int32_t nr, ack, win;
 	size_t i;
-	wyskub_dane_z_naglowka(bufor, &nr, &ack, &win);
-	if (nr < 0) {
+	if (sscanf(bufor, "CLIENT %"SCNd32"\n", &nr) != 1) {
 		debug("Ktoś wysłał nie taki numer co trzeba.");
 		wywal(adres, klienci, MAX_KLIENTOW);
 	} else {
@@ -403,10 +412,9 @@ void wyslij_wiadomosci(const void *const dane, const size_t ile_danych,
 			  (struct sockaddr *) &(klienci[i]->adres_udp),
 			   sizeof(klienci[i]->adres_udp))
 		    != rozmiar_paczki) {
-			info("Nie udało się wysłać do klienta %"
-			       SCNd32", więc go usuwamy.",
-			     klienci[i]->numer_kliencki);
-				usun(klienci[i]);
+			info("Nie udało się wysłać do klienta %"SCNd32
+			     ", więc go usuwamy.", klienci[i]->numer_kliencki);
+			usun(klienci[i]);
 			klienci[i] = NULL;
 		}
 		free(tmp);

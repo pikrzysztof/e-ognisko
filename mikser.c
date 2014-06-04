@@ -8,7 +8,7 @@ static int16_t wez_wartosc(struct mixer_input *const input,
 {
 	size_t dlugosc_tablicy = input->len / 2;
 	int16_t *tablica = input->data;
-	if (dlugosc_tablicy < ktora_liczba)
+	if (dlugosc_tablicy <= ktora_liczba)
 		return 0;
 	++(input->consumed);
 	return ktora_liczba[tablica];
@@ -38,9 +38,9 @@ void mixer(struct mixer_input *inputs, size_t n, void *output_buf,
 			? *output_size : obliczony_rozmiar_wyjscia;
 	}
 	int16_t *wynik = output_buf;
-	for (i = 0; i < *output_size; ++i)
+	for (i = 0; i < n; ++i)
 		i[inputs].consumed = 0;
-	for (i = 0; i < *output_size; ++i)
+	for (i = 0; i < (*output_size); ++i)
 		i[wynik] = zsumuj_wartosci(inputs, n, i);
-
+	(*output_size) *= sizeof(int16_t);
 }

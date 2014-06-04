@@ -34,7 +34,7 @@ static void zwolnij(unsigned int ile_do_zwolnienia, ...)
 
 static int poustawiaj_adresy(klient *kto)
 {
-	socklen_t dlugosc_adresu;
+	socklen_t dlugosc_adresu = sizeof(kto->adres_udp);
 	if ((getpeername(kto->deskryptor_tcp,
 			 (struct sockaddr *) &kto->adres_udp,
 			 &dlugosc_adresu) != 0) ||
@@ -76,7 +76,7 @@ int rowne(struct sockaddr *pierwszy, struct sockaddr *drugi)
 	if (pierwszy->sa_family == AF_INET)
 		return porownaj_ipv4((struct sockaddr_in *) pierwszy,
 				     (struct sockaddr_in *) drugi);
-	if (pierwszy->sa_family = AF_INET6)
+	/* if (pierwszy->sa_family = AF_INET6) */
 		return porownaj_ipv6((struct sockaddr_in6 *) pierwszy,
 				     (struct sockaddr_in6 *) drugi);
 	info("Jakiś lewy adres dostaliśmy.");
@@ -116,7 +116,7 @@ static klient *zrob_klienta(const evutil_socket_t deskryptor)
 	return k;
 }
 
-void usun(klient *const kto)
+void usun(klient *kto)
 {
 	if (kto == NULL)
 		return;
@@ -126,7 +126,10 @@ void usun(klient *const kto)
 			perror("Nie można zamknąć gniazda klienta.");
 		}
 	}
-	zwolnij(3, kto->adres, kto->port, kto);
+	free(kto->adres);
+	free(kto->port);
+	free(kto);
+	/* zwolnij(3, kto->adres, kto->port, kto); */
 }
 
 char *SITREP(klient *const o_kim)
@@ -233,10 +236,6 @@ void dodaj_adresy(const int32_t numer_kliencki, struct sockaddr *adres,
 	struct sockaddr_in *adr_kli;
 	idx_klienta = zlokalizuj_po_nr_klienckim(numer_kliencki,
 						 klienci, MAX_KLIENTOW);
-	if (idx_klienta >= MAX_KLIENTOW) {
-		wywal(adres, klienci, MAX_KLIENTOW);
-		return;
-	}
 	if (klienci[idx_klienta]->potwierdzil_numer) {
 		usun(klienci[idx_klienta]);
 		klienci[idx_klienta] = NULL;
@@ -249,12 +248,13 @@ void dodaj_adresy(const int32_t numer_kliencki, struct sockaddr *adres,
 			(&(klienci[idx_klienta]->adres_udp));
 		adr_kli->sin_port = arg->sin_port;
 		adr_kli->sin_addr.s_addr = arg->sin_addr.s_addr;
-	} else if (adres->sa_family == AF_INET6) {
+	} else if (true/* adres->sa_family == AF_INET6 */) {
 		klienci[idx_klienta]->adres_udp.sin6_port =
 			arg2->sin6_port;
 		memcpy(&(klienci[idx_klienta]->adres_udp.sin6_addr),
 		       &(arg2->sin6_addr), sizeof(arg2->sin6_addr));
 	} else {
+		debug("Klient ma nieobsługiwany adres.");
 		usun(klienci[idx_klienta]);
 		klienci[idx_klienta] = NULL;
 		return;
