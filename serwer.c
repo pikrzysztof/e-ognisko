@@ -109,7 +109,12 @@ void wyslij_dane_udp(evutil_socket_t nic, short flagi,
 	static int32_t numer_paczki;
 	struct mixer_input *inputs = przygotuj_dane_mikserowi(klienci,
 							      MAX_KLIENTOW);
-	size_t aktywni = zlicz_aktywnych_klientow(klienci, MAX_KLIENTOW);
+	size_t aktywni, i;
+	for (i = 0, aktywni = 0; i < MAX_KLIENTOW; ++i) {
+		if (klienci[i] != NULL && klienci[i]->potwierdzil_numer &&
+		    klienci[i]->kolejka->stan == ACTIVE)
+			++aktywni;
+	}
 	const size_t ILE_DANYCH = 176 * TX_INTERVAL;
 	void *wynik = malloc(ILE_DANYCH);
 	size_t dlugosc_wyniku = ILE_DANYCH;
@@ -164,22 +169,6 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi, void *nic)
 					 klienci, MAX_KLIENTOW) == 0) {
 	}
 	++numer_kliencki;
-	/* if (liczba_klientow < MAX_KLIENTOW) { */
-	/* 	if (event_add(tcp_czytanie, NULL) != 0) { */
-	/* 		perror("Nie udało się ustawić czekania na " */
-	/* 		       "kolejne połaczenie TCP."); */
-	/* 		if (liczba_klientow == 0) { */
-	/* 			syserr("Nie udało się ustawić czekania " */
-	/* 			       "na klientów to kończę."); */
-	/* 		} */
-	/* 	} */
-	/* } */
-	/* if (liczba_klientow == 1) { */
-	/* 	if (event_add(tcp_wysylanie_raportu, &czestotliwosc_raportow) */
-	/* 	    != 0) { */
-	/* 		syserr("Nie można wysyłać raportów!"); */
-	/* 	} */
-	/* } */
 	info("czytaj i reaguj tcp spr klientow");
 	sprawdz_klientow();
 }

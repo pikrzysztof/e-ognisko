@@ -1,4 +1,5 @@
 #include "wspolne.h"
+#include <unistd.h>
 #include "klient_struct.h"
 #include "biblioteka_serwera.h"
 #include "historia.h"
@@ -114,6 +115,7 @@ char* przygotuj_raport_grupowy(klient **const klienci,
 		syserr("Zabrakło pamięci na "
 		       "wygenerowanie wiadomosci o klientach.");
 	}
+	memset(wynik, 0, ile_klientow * ROZMIAR_SITREPU + 5);
 	wynik[0] = '\n';
 	wynik[1] = '\0';
 	for (i = 0; i < MAX_KLIENTOW; ++i) {
@@ -371,16 +373,17 @@ struct mixer_input* przygotuj_dane_mikserowi(klient **klienci,
 	size_t i, aktywni;
 	struct mixer_input *inputs = malloc(MAX_LICZBA_KLIENTOW *
 				      sizeof(struct mixer_input));
+	memset(inputs, 0, MAX_LICZBA_KLIENTOW * sizeof(struct mixer_input));
 	if (inputs == NULL)
 		syserr("Nie można zrobić tablicy dla miksera.");
 	for (i = 0, aktywni = 0; i < MAX_LICZBA_KLIENTOW; ++i)
 		if (klienci[i] != NULL &&
 		    klienci[i]->potwierdzil_numer &&
 		    klienci[i]->kolejka->stan == ACTIVE) {
-			inputs[aktywni].data =
-				klienci[i]->kolejka->kolejka;
+			inputs[aktywni].data = klienci[i]->kolejka->kolejka;
 			inputs[aktywni].len =
-			   klienci[i]->kolejka->liczba_zuzytych_bajtow;
+				klienci[i]->kolejka->liczba_zuzytych_bajtow;
+			inputs[aktywni].consumed = 0;
 			++aktywni;
 		}
 	return inputs;
@@ -399,13 +402,20 @@ void wyslij_wiadomosci(const void *const dane, const size_t ile_danych,
 		if (klienci[i] == NULL ||
 		    !klienci[i]->potwierdzil_numer)
 			continue;
-		tmp = zrob_naglowek(DATA, numer_paczki,
-				    klienci[i]->spodziewany_nr_paczki,
-				    daj_win(klienci[i]->kolejka),
-				    MTU);
+		/* tmp = zrob_naglowek(DATA, numer_paczki, */
+		/* 		    klienci[i]->spodziewany_nr_paczki, */
+		/* 		    daj_win(klienci[i]->kolejka), */
+		/* 		    MTU); */
+		tmp = malloc(MTU);
 		if (tmp == NULL)
 			syserr("Zabrakło pamięci.");
-		rozmiar_paczki = strlen(tmp) + ile_danych;
+		info("%i %i %i", numer_paczki, klienci[i]->spodziewany_nr_paczki,
+		     daj_win(klienci[i]->kolejka));
+		write(STDIN_FILENO, dane, ile_danych);
+		sprintf(tmp, "DATA %"SCNd32" %"SCNd32" %"SCNd32"\n",
+			numer_paczki, klienci[i]->spodziewany_nr_paczki,
+			daj_win(klienci[i]->kolejka));
+		rozmiar_paczki = strlen(tmp) + ile_danych - 1;
 		strncat(tmp, dane, ile_danych);
 		if (sendto(gniazdo_udp, tmp, rozmiar_paczki,
 			   MSG_NOSIGNAL | MSG_DONTWAIT,

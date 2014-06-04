@@ -32,21 +32,6 @@ static void zwolnij(unsigned int ile_do_zwolnienia, ...)
 	va_end(do_zwolnienia);
 }
 
-static int poustawiaj_adresy(klient *kto)
-{
-	socklen_t dlugosc_adresu = sizeof(kto->adres_udp);
-	if ((getpeername(kto->deskryptor_tcp,
-			 (struct sockaddr *) &kto->adres_udp,
-			 &dlugosc_adresu) != 0) ||
-	    dlugosc_adresu != sizeof(kto->adres_udp)) {
-		return -1;
-	}
-	if (NULL == inet_ntop(kto->adres_udp.sin6_family, &(kto->adres_udp),
-			      kto->adres, INET6_ADDRSTRLEN + 1))
-		return -1;
-	return 0;
-}
-
 static int porownaj_ipv4(struct sockaddr_in *pierwszy,
 			 struct sockaddr_in *drugi)
 {
@@ -108,10 +93,7 @@ static klient *zrob_klienta(const evutil_socket_t deskryptor)
 	}
 	k->deskryptor_tcp = deskryptor;
 	k->sin_port = 0;
-	if (poustawiaj_adresy(k) != 0) {
-		usun(k);
-		return NULL;
-	}
+	memset(&k->adres_udp, 0, sizeof(k->adres_udp));
 	k->czas = clock();
 	return k;
 }
@@ -242,23 +224,12 @@ void dodaj_adresy(const int32_t numer_kliencki, struct sockaddr *adres,
 	}
 	klienci[idx_klienta]->potwierdzil_numer = true;
 	klienci[idx_klienta]->adres_udp.sin6_family = adres->sa_family;
-	if (adres->sa_family == AF_INET) {
-		adr_kli =
-			(struct sockaddr_in *)
-			(&(klienci[idx_klienta]->adres_udp));
-		adr_kli->sin_port = arg->sin_port;
-		adr_kli->sin_addr.s_addr = arg->sin_addr.s_addr;
-	} else if (true/* adres->sa_family == AF_INET6 */) {
-		klienci[idx_klienta]->adres_udp.sin6_port =
-			arg2->sin6_port;
-		memcpy(&(klienci[idx_klienta]->adres_udp.sin6_addr),
-		       &(arg2->sin6_addr), sizeof(arg2->sin6_addr));
-	} else {
-		debug("Klient ma nieobsługiwany adres.");
-		usun(klienci[idx_klienta]);
-		klienci[idx_klienta] = NULL;
-		return;
-	}
+	klienci[idx_klienta]->adres_udp.sin6_family = arg2->sin6_family;
+	klienci[idx_klienta]->adres_udp.sin6_flowinfo = arg2->sin6_flowinfo;
+	klienci[idx_klienta]->adres_udp.sin6_port = arg2->sin6_port;
+	memcpy(&(klienci[idx_klienta]->adres_udp.sin6_addr),
+	       &(arg2->sin6_addr), sizeof(arg2->sin6_addr));
+	klienci[idx_klienta]->adres_udp.sin6_scope_id = arg2->sin6_scope_id;
 	/* Wszystko się powiodło. Fajnie. */
 	/* Teraz typo wpisać port tam gdzie trzeba. */
 	klienci[idx_klienta]->port = malloc(MAX_ROZMIAR_PORTU);
