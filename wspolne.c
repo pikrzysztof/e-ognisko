@@ -218,8 +218,7 @@ bool wyslij_tekst(int deskryptor, const char *const tekst)
 	return (write(deskryptor, tekst, ile_wyslac) == ile_wyslac);
 }
 
-ssize_t dopisz_na_koncu(char *const poczatek,
-			const char *const fmt, ...)
+ssize_t dopisz_na_koncu(char *const poczatek, const char *const fmt, ...)
 {
 	size_t dlugosc = strlen(poczatek);
 	va_list fmt_args;
@@ -240,8 +239,7 @@ void konkatenacja(char *const pierwszy, const char *const drugi,
 }
 
 ssize_t czytaj_do_konca_linii(const int deskryptor,
-			      char *const bufor,
-			      const ssize_t rozmiar_bufora)
+			      char *const bufor, const ssize_t rozmiar_bufora)
 {
 	ssize_t ile_wczytano;
 	ssize_t i = -1;

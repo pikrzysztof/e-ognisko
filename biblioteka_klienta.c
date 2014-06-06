@@ -9,6 +9,7 @@ static ssize_t zrob_paczke_danych(const size_t okno,
 				  const int32_t nr_paczki,
 				  char **napis)
 {
+	const size_t MAX_ROZMIAR_DANYCH = 1400;
 	static bool koniec_wejscia;
 	static int32_t ostatnio_wyslany_nr;
 	static char* ostatnio_wyslany_pakiet;
@@ -20,41 +21,52 @@ static ssize_t zrob_paczke_danych(const size_t okno,
 	int errtmp;
 	const size_t MIN_ROZMIAR = 30;
 	(*napis) = malloc(MTU);
+	debug("okno %i paczka nr %i, ostatnio wyslany %i", okno, nr_paczki,
+	      ostatnio_wyslany_nr);
 	if (*napis == NULL)
 		syserr("Mało pamięci.");
-	if (nr_paczki > 0 && nr_paczki == ostatnio_wyslany_nr && pytal_o_taki) {
-		rozmiar = strlen(ostatnio_wyslany_pakiet) + 1;
-		memcpy(*napis, ostatnio_wyslany_pakiet, rozmiar);
+	if (nr_paczki == 0) {
+		/* Inicjalizacja wszystkiego, na razie nic. */
+		debug("poproszono o 0 paczke");
+	} else if (nr_paczki == ostatnio_wyslany_nr && pytal_o_taki) {
+		/* Ponowne przesłanie danych. */
+		memcpy(*napis, ostatnio_wyslany_pakiet, ostatni_wynik);
 		debug("znowu ta sama paczka.");
 		return ostatni_wynik;
-	} else {
+	} else  if (nr_paczki == ostatnio_wyslany_nr) {
+		/* Pierwsze nie potwierdzenie ostatniej paczki. */
 		pytal_o_taki = true;
 		free(*napis);
+		debug("linia %i", __LINE__);
 		return 0;
 	}
+	/* Serwer chce nowy pakiet. */
 	pytal_o_taki = false;
 	free(ostatnio_wyslany_pakiet);
 	ostatnio_wyslany_pakiet = zrob_naglowek(UPLOAD, nr_paczki, -1, -1,
-						MIN_ROZMIAR + okno);
-	if (ostatnio_wyslany_pakiet  == NULL) {
+						MIN_ROZMIAR +
+						min(okno, MAX_ROZMIAR_DANYCH));
+	if (ostatnio_wyslany_pakiet == NULL)
 		syserr("Pamięci brakuje.");
-	}
+	debug("ZROBILI NAM NAGLOWEK %s", ostatnio_wyslany_pakiet);
 	poczatek_danych = strchr(ostatnio_wyslany_pakiet, '\n');
 	++poczatek_danych;
 	ostatni_wynik = strlen(ostatnio_wyslany_pakiet);
 	errtmp = errno;
-	ile_wczytano = read(STDIN_FILENO, poczatek_danych, okno);
+	ile_wczytano = read(STDIN_FILENO, poczatek_danych,
+			    min(okno, MAX_ROZMIAR_DANYCH));
 	errno = errtmp;
 	ostatni_wynik += ile_wczytano;
 	if (ile_wczytano <= 0) {
 		free(ostatnio_wyslany_pakiet);
 		ostatnio_wyslany_pakiet = NULL;
+		debug("Linia %i", __LINE__);
 		return 0;
 	}
-	if (*napis == NULL) {
-		syserr("Pamięci brakuje.");
-	}
-	memcpy(*napis, ostatnio_wyslany_pakiet, ostatni_wynik);
+	ostatnio_wyslany_nr = nr_paczki;
+	debug("laczna dlugosc pakietu %i", ostatni_wynik);
+	memcpy((*napis), ostatnio_wyslany_pakiet, ostatni_wynik);
+	debug("koniec");
 	return ostatni_wynik;
 }
 
@@ -164,28 +176,22 @@ int obsluz_data(const evutil_socket_t gniazdo,
 		write(gniazdo, dane, strlen(dane));
 		free(dane);
 	} else {
-		dane = strchr(wiadomosc, '\n');
-		++dane;
-		ile_danych -= dane - wiadomosc;
-		(*ostatnio_odebrany_nr) = nr;
-		if (ile_danych <= 0) {
-			free(napis);
-			return -1;
-		}
-		if (write(STDOUT_FILENO, dane, ile_danych) != ile_danych)
-			syserr("Nie da się pisać na stdout.");
+		wypisz(wiadomosc, ile_danych);
 	}
 	paczka_danych_wynik = zrob_paczke_danych(win, ack, &napis);
+	debug("wynik: %i, gniazdo %i", paczka_danych_wynik, gniazdo);
 	if (paczka_danych_wynik > 0) {
 		wynik = write(gniazdo, napis, paczka_danych_wynik);
 		(*ostatnio_odebrany_ack) = ack;
+		debug("wysłaliśmy");
 		free(napis);
 		napis = NULL;
-		if (wynik <= 0)
+		if (wynik < 0)
 			return -1;
 	} else {
 		return 0;
 	}
+	return 0;
 }
 
 int obsluz_ack(const evutil_socket_t gniazdo, const char *const naglowek,
