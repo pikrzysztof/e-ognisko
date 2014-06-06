@@ -110,14 +110,14 @@ void wyslij_dane_udp(evutil_socket_t nic, short flagi,
 	struct mixer_input *inputs = przygotuj_dane_mikserowi(klienci,
 							      MAX_KLIENTOW);
 	size_t aktywni, i;
+	const size_t ILE_DANYCH = 176 * TX_INTERVAL;
+	void *wynik = malloc(ILE_DANYCH);
+	size_t dlugosc_wyniku = ILE_DANYCH;
 	for (i = 0, aktywni = 0; i < MAX_KLIENTOW; ++i) {
 		if (klienci[i] != NULL && klienci[i]->potwierdzil_numer &&
 		    klienci[i]->kolejka->stan == ACTIVE)
 			++aktywni;
 	}
-	const size_t ILE_DANYCH = 176 * TX_INTERVAL;
-	void *wynik = malloc(ILE_DANYCH);
-	size_t dlugosc_wyniku = ILE_DANYCH;
 	info("Wyślij dane UDP");
 	if (wynik == NULL)
 		syserr("Zabrakło pamięci.");
@@ -146,7 +146,8 @@ void udp_czytanie(evutil_socket_t gniazdo_udp, short flagi, void *nic)
 	if (ile_danych <= 0) {
 		syserr("Recv po udp się nie powiodło.");
 	}
-	ogarnij_wiadomosc_udp(bufor, ile_danych, &adres, klienci,
+	ogarnij_wiadomosc_udp(bufor, ile_danych,
+			      (struct sockaddr_in6 *) &adres, klienci,
 			      MAX_KLIENTOW, gniazdo_udp, hist);
 	free(bufor);
 	info("udp czytanie spr klientow");

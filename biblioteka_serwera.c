@@ -1,3 +1,4 @@
+#include <assert.h>
 #include "wspolne.h"
 #include <unistd.h>
 #include "klient_struct.h"
@@ -56,14 +57,11 @@ evutil_socket_t zrob_i_przygotuj_gniazdo(const char *const port,
 		syserr("Nie można zrobić gniazda.");
 	memset(&bindowanie, 0, sizeof(bindowanie));
 	bindowanie.sin6_family = AF_INET6;
-	bindowanie.sin6_flowinfo = 0;
 	bindowanie.sin6_port = htons(atoi(port));
 	bindowanie.sin6_addr = in6addr_any;
-	if (bind(gniazdo, (struct sockaddr *) &bindowanie,
-		 sizeof(bindowanie))
+	if (bind(gniazdo, (struct sockaddr *) &bindowanie,  sizeof(bindowanie))
 	    != 0)
-		syserr("Nie można związać gniazda z adresem i "
-		       "portem.");
+		syserr("Nie można związać gniazda z adresem i portem.");
 	return gniazdo;
 }
 
@@ -80,8 +78,7 @@ int wstepne_ustalenia_z_klientem(const evutil_socket_t deskryptor_tcp,
 			     " klienta %"SCNd32".", numer_kliencki);
 		return -1;
 	}
-	if (!wyslij_numer_kliencki(deskryptor_tcp,
-				   numer_kliencki)) {
+	if (!wyslij_numer_kliencki(deskryptor_tcp, numer_kliencki)) {
 		info("Nie udało się wysłać "
 		     "numeru klienckiego.");
 		usun_klienta(deskryptor_tcp, klienci,
@@ -178,21 +175,20 @@ void wyslij_wiadomosc_wszystkim(char *wiadomosc, klient **const klienci,
 	}
 }
 
-size_t podaj_indeks_klienta(struct sockaddr *adres,
+size_t podaj_indeks_klienta(struct sockaddr_in6 *adres,
 			    klient **const klienci, const size_t MAX_KLIENTOW)
 {
 	size_t i;
 	for (i = 0; i < MAX_KLIENTOW; ++i) {
 		if (klienci[i] == NULL)
 			continue;
-		if (rowne((struct sockaddr *)&(klienci[i]->adres_udp),
-			  adres) == 0)
+		if (rowne(&(klienci[i]->adres_udp), adres) == 0)
 			return i;
 	}
 	return MAX_KLIENTOW;
 }
 
-static void keepalive(struct sockaddr *adres,
+static void keepalive(struct sockaddr_in6 *adres,
 		      klient **klienci, size_t MAX_KLIENTOW)
 {
 	size_t kto = podaj_indeks_klienta(adres, klienci, MAX_KLIENTOW);
@@ -212,7 +208,7 @@ static void keepalive(struct sockaddr *adres,
 	}
 }
 
-void wywal(struct sockaddr* adres, klient **klienci, size_t MAX_KLIENTOW)
+void wywal(struct sockaddr_in6* adres, klient **klienci, size_t MAX_KLIENTOW)
 {
 	size_t indx_klienta = podaj_indeks_klienta(adres, klienci,
 						   MAX_KLIENTOW);
@@ -225,7 +221,7 @@ void wywal(struct sockaddr* adres, klient **klienci, size_t MAX_KLIENTOW)
 
 
 static void zaktualizuj_klienta(char *bufor, size_t ile_danych,
-				struct sockaddr* adres, klient **klienci,
+				struct sockaddr_in6* adres, klient **klienci,
 				size_t MAX_KLIENTOW)
 {
 	int32_t nr, ack, win;
@@ -238,7 +234,7 @@ static void zaktualizuj_klienta(char *bufor, size_t ile_danych,
 	}
 }
 
-static void wyslij_acka(struct sockaddr* adres, evutil_socket_t gniazdo_udp,
+static void wyslij_acka(struct sockaddr_in6* adres, evutil_socket_t gniazdo_udp,
 		   klient **klienci, size_t MAX_KLIENTOW)
 {
 	size_t idx_klienta = podaj_indeks_klienta(adres, klienci, MAX_KLIENTOW);
@@ -259,7 +255,8 @@ static void wyslij_acka(struct sockaddr* adres, evutil_socket_t gniazdo_udp,
 		return;
 	}
 	if (sendto(gniazdo_udp, odpowiedz, strlen(odpowiedz),
-		   MSG_NOSIGNAL | MSG_DONTWAIT, adres, sizeof(*adres)) <= 0) {
+		   MSG_NOSIGNAL | MSG_DONTWAIT, (struct sockaddr *) adres,
+		   sizeof(*adres)) <= 0) {
 		usun(klienci[idx_klienta]);
 		klienci[idx_klienta] = NULL;
 	}
@@ -295,7 +292,8 @@ static int wyslij_paczke(klient *komu, evutil_socket_t gniazdo_udp,
 	return 0;
 }
 
-static void retransmit(char *bufor, size_t ile_danych, struct sockaddr* adres,
+static void retransmit(char *bufor, size_t ile_danych,
+		       struct sockaddr_in6 *adres,
 		       klient **klienci, size_t MAX_KLIENTOW,
 		       evutil_socket_t gniazdo_udp, historia *hist)
 {
@@ -322,7 +320,7 @@ static void retransmit(char *bufor, size_t ile_danych, struct sockaddr* adres,
 }
 
 void ogarnij_wiadomosc_udp(char *bufor, size_t ile_danych,
-			   struct sockaddr* adres, klient **klienci,
+			   struct sockaddr_in6* adres, klient **klienci,
 			   size_t MAX_KLIENTOW, evutil_socket_t gniazdo_udp,
 			   historia *hist)
 {
@@ -394,40 +392,42 @@ void wyslij_wiadomosci(const void *const dane, const size_t ile_danych,
 		       const size_t MAX_KLIENTOW,
 		       int32_t numer_paczki)
 {
-	size_t i, rozmiar_paczki;
+	size_t i, rozmiar_paczki, tmp2;
+	char *wiadomosc;
 	char *tmp;
 	for (i = 0; i < MAX_KLIENTOW; ++i) {
-		if (klienci[i] == NULL ||
-		    !klienci[i]->potwierdzil_numer)
+		if (klienci[i] == NULL || !klienci[i]->potwierdzil_numer)
 			continue;
 		/* tmp = zrob_naglowek(DATA, numer_paczki, */
 		/* 		    klienci[i]->spodziewany_nr_paczki, */
 		/* 		    daj_win(klienci[i]->kolejka), */
 		/* 		    MTU); */
-		tmp = malloc(MTU);
-		info("");
-		info("danych %i",ile_danych);
-		info("");
-		if (tmp == NULL)
+		wiadomosc = malloc(MTU);
+		if (wiadomosc == NULL)
 			syserr("Zabrakło pamięci.");
-		info("%i %i %i", numer_paczki, klienci[i]->spodziewany_nr_paczki,
-		     daj_win(klienci[i]->kolejka));
-		write(STDIN_FILENO, dane, ile_danych);
-		sprintf(tmp, "DATA %"SCNd32" %"SCNd32" %"SCNd32"\n",
-			numer_paczki, klienci[i]->spodziewany_nr_paczki,
-			daj_win(klienci[i]->kolejka));
-		rozmiar_paczki = strlen(tmp) + ile_danych - 1;
-		strncat(tmp, dane, ile_danych);
-		if (sendto(gniazdo_udp, tmp, rozmiar_paczki,
-			   MSG_NOSIGNAL | MSG_DONTWAIT,
-			  (struct sockaddr *) &(klienci[i]->adres_udp),
-			   sizeof(klienci[i]->adres_udp))
-		    != rozmiar_paczki) {
+		/* write(STDIN_FILENO, dane, ile_danych); */
+		rozmiar_paczki = sprintf(wiadomosc,
+					 "DATA %"SCNd32" %"SCNd32" %"SCNd32"\n",
+					 numer_paczki,
+					 klienci[i]->spodziewany_nr_paczki,
+					 daj_win(klienci[i]->kolejka));
+		tmp = strchr(wiadomosc, '\n');
+		++tmp;
+		memcpy(tmp, dane, ile_danych);
+		rozmiar_paczki += ile_danych;
+		tmp2 = sendto(gniazdo_udp, wiadomosc, rozmiar_paczki,
+			      MSG_NOSIGNAL | MSG_DONTWAIT,
+			      (struct sockaddr *) &(klienci[i]->adres_udp),
+			      sizeof(klienci[i]->adres_udp));
+		debug("wynik sendto %i", tmp2);
+		if (tmp2 != rozmiar_paczki) {
 			info("Nie udało się wysłać do klienta %"SCNd32
 			     ", więc go usuwamy.", klienci[i]->numer_kliencki);
 			usun(klienci[i]);
 			klienci[i] = NULL;
+		} else {
+			debug("udało się wysłać");
 		}
-		free(tmp);
+		free(wiadomosc);
 	}
 }

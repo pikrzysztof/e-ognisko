@@ -32,16 +32,17 @@ extern void usun_klienta(const evutil_socket_t deskryptor_tcp,
 			 klient **const klienci,
 			 const size_t dlugosc_tablicy);
 
-extern int rowne(struct sockaddr *pierwszy, struct sockaddr *drugi);
+extern int rowne(struct sockaddr_in6 *pierwszy, struct sockaddr_in6 *drugi);
 
-extern void dodaj_adresy(const int32_t numer_kliencki, struct sockaddr *adres,
+extern void dodaj_adresy(const int32_t numer_kliencki,
+			 struct sockaddr_in6 *adres,
 			klient **const klienci, const size_t MAX_KLIENTOW);
 
-extern void wywal(struct sockaddr* adres, klient **klienci,
-		  const size_t MAX_KLIENTOW);
+/* extern void wywal(struct sockaddr* adres, klient **klienci, */
+/* 		  const size_t MAX_KLIENTOW); */
 
 extern void dodaj_klientowi_dane(void *bufor, size_t ile_danych,
-				 struct sockaddr *adres, klient **const klienci,
+				 struct sockaddr_in6 *adres, klient **const klienci,
 				 const size_t MAX_KLIENTOW);
 
 

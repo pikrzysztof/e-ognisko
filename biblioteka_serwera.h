@@ -29,13 +29,13 @@ extern void wyslij_wiadomosc_wszystkim(char *wiadomosc,
 				       const size_t MAX_KLIENTOW);
 
 extern void ogarnij_wiadomosc_udp(char *bufor, size_t ile_danych,
-				  struct sockaddr* adres,
+				  struct sockaddr_in6 *adres,
 				  klient **klienci,
 				  size_t MAX_KLIENTOW,
 				  evutil_socket_t gniazdo_udp,
 				  historia *hist);
 
-extern size_t podaj_indeks_klienta(struct sockaddr *adres,
+extern size_t podaj_indeks_klienta(struct sockaddr_in6 *adres,
 				   klient **const klienci,
 				   const size_t MAX_KLIENTOW);
 
