@@ -136,7 +136,6 @@ void wyslij_dane_udp(evutil_socket_t nic, short flagi,
 
 void udp_czytanie(evutil_socket_t gniazdo_udp, short flagi, void *nic)
 {
-	const size_t MTU = 2000;
 	void *bufor = malloc(MTU);
 	struct sockaddr adres;
 	socklen_t dlugosc_adresu = sizeof(adres);

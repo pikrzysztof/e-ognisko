@@ -16,6 +16,7 @@
 const char *const OZNACZENIE_PARAMETRU_PORTU;
 const char *const DOMYSLNY_NUMER_PORTU;
 const ssize_t BLAD_CZYTANIA;
+const size_t MTU;
 
 typedef enum naglowek {
 	CLIENT,

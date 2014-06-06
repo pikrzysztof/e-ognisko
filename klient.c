@@ -29,27 +29,32 @@ void zle_uzywane(const char *const nazwa_programu)
 void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 			 void *baza_zdarzen)
 {
-	info("Czytaj i reaguj TCP");
+	const size_t MAX_ROZMIAR = 20000;
+	char *const tmp = malloc(MAX_ROZMIAR);
+	size_t ile_przyszlo;
+	if (tmp == NULL)
+		syserr("Mało pamięci.");
 	if (flagi & EV_TIMEOUT || !(flagi & EV_READ)) {
 		perror("Problem z połączeniem TCP, długo nie"
 		       " ma wiadomości.");
-		if (event_base_loopbreak((struct event_base *)
-					 baza_zdarzen)
-		    != 0) {
+		if (event_base_loopbreak((struct event_base *) baza_zdarzen)
+		    != 0)
 			perror("Nie udało się wyskoczyć z pętli.");
-		}
 		return;
 	}
-	debug("Czytamy z TCP!");
-	if (sendfile(STDERR_FILENO, gniazdo_tcp, NULL, SIZE_MAX) < 0)
-		{
-		perror("Problem z przesłaniem danych "
-		       "z TCP na STDOUT.");
-		if (event_base_loopbreak(
-				   (struct event_base *) baza_zdarzen)
+	ile_przyszlo = read(gniazdo_tcp, tmp, MAX_ROZMIAR);
+	if (ile_przyszlo <= 0) {
+		perror("Coś dziwnego od serwera.");
+		free(tmp);
+		if (event_base_loopbreak((struct event_base *) baza_zdarzen)
 		    != 0) {
-			perror("Nie udało się wyskoczyć z pętli.");
+			syserr("Nie udało się wyskoczyć z pętli");
 		}
+	} else {
+		if (write(STDOUT_FILENO, tmp, ile_przyszlo) != ile_przyszlo) {
+			syserr("Nie da się pisać na stdout.");
+		}
+		free(tmp);
 	}
 }
 
@@ -67,10 +72,8 @@ void czytaj_i_reaguj_udp(evutil_socket_t gniazdo_udp, short flagi,
 	udp_arg potrzebne = *((udp_arg *) baza_i_liczby);
 	char *naglowek;
 	ssize_t ile_wczytane;
-	const size_t MTU = 2000;
 	if (flagi & EV_TIMEOUT || !(flagi & EV_READ)) {
-		skoncz_udp(potrzebne.baza_zdarzen,
-			   "Za długo czekamy na UDP.");
+		skoncz_udp(potrzebne.baza_zdarzen, "Za długo czekamy na UDP.");
 		return;
 	}
 	naglowek = malloc(MTU);
@@ -79,30 +82,27 @@ void czytaj_i_reaguj_udp(evutil_socket_t gniazdo_udp, short flagi,
 	ile_wczytane = recv(gniazdo_udp, naglowek, MTU, MSG_DONTWAIT);
 	if (ile_wczytane <= 0) {
 		free(naglowek);
-		skoncz_udp(potrzebne.baza_zdarzen,
-			   "Dziwny nagłówek UDP.");
+		skoncz_udp(potrzebne.baza_zdarzen, "Dziwny nagłówek UDP.");
 		return;
 	}
+	naglowek[ile_wczytane] = '\0';
 	switch (rozpoznaj_naglowek(naglowek)) {
 	case DATA:
 		if (obsluz_data(gniazdo_udp, naglowek, ile_wczytane,
 				&potrzebne.ostatnio_odebrany_ack,
 				&potrzebne.ostatnio_odebrany_nr) != 0)
-			skoncz_udp(potrzebne.baza_zdarzen,
-				   "Źle z DATA.");
+			skoncz_udp(potrzebne.baza_zdarzen, "Źle z DATA.");
 		free(naglowek);
 		break;
 	case ACK:
 		if (obsluz_ack(gniazdo_udp, naglowek,
 			       &potrzebne.ostatnio_odebrany_ack,
 			       &potrzebne.ostatnio_odebrany_nr) != 0)
-			skoncz_udp(potrzebne.baza_zdarzen,
-				   "Źle z ACK.");
+			skoncz_udp(potrzebne.baza_zdarzen, "Źle z ACK.");
 		free(naglowek);
 		break;
 	default:
-		skoncz_udp(potrzebne.baza_zdarzen,
-			   "Dziwny pakiet od serwera.");
+		skoncz_udp(potrzebne.baza_zdarzen, "Dziwny pakiet od serwera.");
 		free(naglowek);
 		break;
 	}
@@ -112,6 +112,7 @@ void wyslij_keepalive(evutil_socket_t minus_jeden, short flagi,
 		      void *deskryptor)
 {
 	const int arg = *((int *) deskryptor);
+	/* debug("KEEPALIVE"); */
 	if (!wyslij_tekst(arg, "KEEPALIVE\n")) {
 		perror("Nie udalo sie wyspac KEEPALIVE.");
 	}
@@ -127,9 +128,6 @@ evutil_socket_t ustanow_polaczenie(const int protokol,
 						     adres_serwera);
 	struct addrinfo* adres_binarny_serwera = NULL;
 	int set = 1;
-	assert((protokol == IPPROTO_TCP && typ_gniazda == SOCK_STREAM)
-	       ||
-	       (protokol == IPPROTO_UDP && typ_gniazda == SOCK_DGRAM));
 	if (gniazdo == -1)
 		return gniazdo;
 	adres_binarny_serwera = podaj_adres_binarny(adres_serwera,
@@ -165,8 +163,8 @@ void dzialaj(const char* const adres_serwera, const char* const port)
 	udp_arg dla_funkcji_udp;
 	struct timeval dziesiec_setnych = {0, 100000};
 	debug("ustawiamy gniazda na nieblokujace");
-	if (!ustaw_gniazdo_nieblokujace(STDIN_FILENO) ||
-	    !ustaw_gniazdo_nieblokujace(STDOUT_FILENO)) {
+	if (!ustaw_gniazdo_nieblokujace(STDIN_FILENO) /* || */
+	    /* !ustaw_gniazdo_nieblokujace(STDOUT_FILENO) */) {
 		perror("Nie mozna ustawic STDIN/STDOUT na"
 		       " nieblokujace.");
 		return;
@@ -197,8 +195,7 @@ void dzialaj(const char* const adres_serwera, const char* const port)
 		wyczysc(&deskryptor_tcp, NULL, NULL, 0);
 		return;
 	}
-	if (!wyslij_numer_kliencki(deskryptor_udp, moj_numer_kliencki))
-		{
+	if (!wyslij_numer_kliencki(deskryptor_udp, moj_numer_kliencki)) {
 		perror("Nie udało się zgłosić.\n");
 		wyczysc(&deskryptor_tcp, &deskryptor_udp, NULL, 0);
 		return;
@@ -223,12 +220,10 @@ void dzialaj(const char* const adres_serwera, const char* const port)
 	dla_funkcji_udp.ostatnio_odebrany_ack = 0;
 	dla_funkcji_udp.ostatnio_odebrany_nr = -1;
 	wiadomosc_na_udp = event_new(baza_zdarzen, deskryptor_udp,
-				     EV_PERSIST | EV_READ,
-				     czytaj_i_reaguj_udp,
+				     EV_PERSIST | EV_READ, czytaj_i_reaguj_udp,
 				     &dla_funkcji_udp);
 	wiadomosc_na_tcp = event_new(baza_zdarzen, deskryptor_tcp,
-				     EV_PERSIST | EV_READ,
-				     czytaj_i_reaguj_tcp,
+				     EV_PERSIST | EV_READ, czytaj_i_reaguj_tcp,
 				     &baza_zdarzen);
 	if (wiadomosc_na_tcp == NULL || wiadomosc_na_udp == NULL) {
 		perror("Nie da się utworzyc wydarzenia z czytaniem.");
@@ -252,6 +247,7 @@ void dzialaj(const char* const adres_serwera, const char* const port)
 		return;
 	}
 	debug("Pętla obsługi zdarzeń!");
+	debug("UDP desc: %i, TCP desc: %i", deskryptor_udp, deskryptor_tcp);
 	if (event_base_dispatch(baza_zdarzen) == -1) {
 		perror("Nie udało się uruchomić pętli obsługi "
 		       "zdarzeń.");

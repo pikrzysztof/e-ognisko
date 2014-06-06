@@ -269,7 +269,6 @@ static void wyslij_acka(struct sockaddr* adres, evutil_socket_t gniazdo_udp,
 static int wyslij_paczke(klient *komu, evutil_socket_t gniazdo_udp,
 			  int32_t numer_paczki, historia *hist)
 {
-	const size_t MTU = 2000;
 	wpis* wpis_historii;
 	size_t ile_wyslac;
 	char *tmp = zrob_naglowek(DATA, numer_paczki,
@@ -397,7 +396,6 @@ void wyslij_wiadomosci(const void *const dane, const size_t ile_danych,
 {
 	size_t i, rozmiar_paczki;
 	char *tmp;
-	const size_t MTU = 2000;
 	for (i = 0; i < MAX_KLIENTOW; ++i) {
 		if (klienci[i] == NULL ||
 		    !klienci[i]->potwierdzil_numer)
@@ -407,6 +405,9 @@ void wyslij_wiadomosci(const void *const dane, const size_t ile_danych,
 		/* 		    daj_win(klienci[i]->kolejka), */
 		/* 		    MTU); */
 		tmp = malloc(MTU);
+		info("");
+		info("danych %i",ile_danych);
+		info("");
 		if (tmp == NULL)
 			syserr("Zabrakło pamięci.");
 		info("%i %i %i", numer_paczki, klienci[i]->spodziewany_nr_paczki,

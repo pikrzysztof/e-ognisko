@@ -23,7 +23,7 @@ static const bool DEBUG = false;
 const ssize_t BLAD_CZYTANIA = EOF + 1 >= 0 ? -5 : EOF + 1;
 const char *const OZNACZENIE_PARAMETRU_PORTU = "-p";
 const char *const DOMYSLNY_NUMER_PORTU = "12534";
-
+const size_t MTU = 2000;
 bool jest_int32(const char *const liczba)
 {
 	const char *const MAX_INT32 = "2147483647";
@@ -168,6 +168,7 @@ bool wyslij_numer_kliencki(int deskryptor, int32_t numer_kliencki)
 	ssize_t dlugosc_danych;
 	char *bufor = malloc(ROZMIAR_BUFORA * sizeof(char));
 	sprintf(bufor, "CLIENT %"SCNd32"\n", numer_kliencki);
+	debug(" KOMUNIKAT %s", bufor);
 	dlugosc_danych = strlen(bufor);
 	assert(bufor[dlugosc_danych] == '\0');
 	debug("wysylam wiadomosc z nr klienckim %s", bufor);
@@ -183,17 +184,17 @@ bool wyslij_numer_kliencki(int deskryptor, int32_t numer_kliencki)
 
 int32_t odbierz_numer_kliencki(int deskryptor)
 {
-	size_t max_rozmiar_wiadomosci_powitalnej = 30;
-	char *przyjmowane = malloc(sizeof(char) * max_rozmiar_wiadomosci_powitalnej);
+	const size_t MAX_ROZMIAR_WIADOMOSCI_POWITALNEJ = 30;
+	char *przyjmowane = malloc(MAX_ROZMIAR_WIADOMOSCI_POWITALNEJ);
 	const char *const MAX_NUMER_KLIENTA = "2147483647";
 	const char *const MIN_NUMER_KLIENTA = "0";
 	const size_t MIN_DLUGOSC_WIADOMOSCI = 9;
 	const size_t POCZATEK_NUMERU = 7;
 	int32_t wynik;
-	ssize_t ile_przeczytane =
-		czytaj_do_konca_linii(deskryptor, przyjmowane,
-				      max_rozmiar_wiadomosci_powitalnej);
-	if (ile_przeczytane < MIN_DLUGOSC_WIADOMOSCI) {
+	ssize_t ile_przeczytane = read(deskryptor, przyjmowane,
+				       MAX_ROZMIAR_WIADOMOSCI_POWITALNEJ);
+	if (ile_przeczytane < MIN_DLUGOSC_WIADOMOSCI ||
+	    ile_przeczytane == MAX_ROZMIAR_WIADOMOSCI_POWITALNEJ) {
 		free(przyjmowane);
 		perror("Jakiś dziwny numer kliencki.");
 		return -1;

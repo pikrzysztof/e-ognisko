@@ -1,5 +1,6 @@
+#include <errno.h>
 #include "biblioteka_klienta.h"
-
+#include "wspolne.h"
 size_t RETRANSMIT_LIMIT;
 
  /* Daje EOF jak jest EOF, liczba bajtow do wyslania, jak sie udalo, */
@@ -12,58 +13,48 @@ static ssize_t zrob_paczke_danych(const size_t okno,
 	static int32_t ostatnio_wyslany_nr;
 	static char* ostatnio_wyslany_pakiet;
 	static ssize_t ostatni_wynik;
+	static bool pytal_o_taki;
 	size_t rozmiar;
-	char *tmp;
+	char *poczatek_danych;
 	ssize_t ile_wczytano;
+	int errtmp;
 	const size_t MIN_ROZMIAR = 30;
-	if (nr_paczki > 0 && nr_paczki == ostatnio_wyslany_nr) {
+	(*napis) = malloc(MTU);
+	if (*napis == NULL)
+		syserr("Mało pamięci.");
+	if (nr_paczki > 0 && nr_paczki == ostatnio_wyslany_nr && pytal_o_taki) {
 		rozmiar = strlen(ostatnio_wyslany_pakiet) + 1;
-		*napis = malloc(rozmiar);
-		if (*napis == NULL)
-			return BLAD_CZYTANIA;
 		memcpy(*napis, ostatnio_wyslany_pakiet, rozmiar);
-		if (*napis == NULL)
-			return BLAD_CZYTANIA;
+		debug("znowu ta sama paczka.");
 		return ostatni_wynik;
+	} else {
+		pytal_o_taki = true;
+		free(*napis);
+		return 0;
 	}
+	pytal_o_taki = false;
 	free(ostatnio_wyslany_pakiet);
-	if (koniec_wejscia) {
-		return EOF;
-	}
-	ostatnio_wyslany_pakiet = zrob_naglowek(UPLOAD, nr_paczki,
-						-1, -1,
+	ostatnio_wyslany_pakiet = zrob_naglowek(UPLOAD, nr_paczki, -1, -1,
 						MIN_ROZMIAR + okno);
-	tmp = malloc(okno + 5);
-	if (tmp == NULL || ostatnio_wyslany_pakiet  == NULL) {
-		free(ostatnio_wyslany_pakiet);
-		ostatnio_wyslany_pakiet = NULL;
-		return BLAD_CZYTANIA;
+	if (ostatnio_wyslany_pakiet  == NULL) {
+		syserr("Pamięci brakuje.");
 	}
+	poczatek_danych = strchr(ostatnio_wyslany_pakiet, '\n');
+	++poczatek_danych;
 	ostatni_wynik = strlen(ostatnio_wyslany_pakiet);
-	ile_wczytano = read(STDIN_FILENO, tmp, okno);
+	errtmp = errno;
+	ile_wczytano = read(STDIN_FILENO, poczatek_danych, okno);
+	errno = errtmp;
 	ostatni_wynik += ile_wczytano;
-	if (ile_wczytano < 0) {
+	if (ile_wczytano <= 0) {
 		free(ostatnio_wyslany_pakiet);
 		ostatnio_wyslany_pakiet = NULL;
-		free(tmp);
-		return BLAD_CZYTANIA;
+		return 0;
 	}
-	if (ile_wczytano == 0) {
-		koniec_wejscia = true;
-		free(tmp);
-		free(ostatnio_wyslany_pakiet);
-		return EOF;
-	}
-	konkatenacja(ostatnio_wyslany_pakiet, tmp, ile_wczytano);
-	free(tmp);
-	*napis = malloc(okno + MIN_ROZMIAR);
 	if (*napis == NULL) {
-		free(ostatnio_wyslany_pakiet);
-		ostatnio_wyslany_pakiet = NULL;
-		return BLAD_CZYTANIA;
+		syserr("Pamięci brakuje.");
 	}
-	memcpy(*napis, ostatnio_wyslany_pakiet,
-	       strlen(ostatnio_wyslany_pakiet) + 1);
+	memcpy(*napis, ostatnio_wyslany_pakiet, ostatni_wynik);
 	return ostatni_wynik;
 }
 
@@ -106,6 +97,18 @@ bool popros_o_retransmisje(const int deskryptor, const int numer)
 	wynik = wyslij_tekst(deskryptor, tekst);
 	free(tekst);
 	return wynik;
+}
+
+static void wypisz(const char *const dane_z_naglowkiem, size_t rozmiar)
+{
+	const char *tmp = strchr(dane_z_naglowkiem, '\n');
+	size_t ile_binarnych;
+	if (tmp == NULL)
+		return;
+	++tmp;
+	ile_binarnych = rozmiar - (tmp - dane_z_naglowkiem);
+	if (write(STDOUT_FILENO, tmp, ile_binarnych) != ile_binarnych)
+		syserr("Write się nie udał.");
 }
 
 /* Daje BLAD_CZYTANIA jak cos sie nie uda, EOF jak jest koniec pliku, */
@@ -151,44 +154,38 @@ int obsluz_data(const evutil_socket_t gniazdo,
 	rodzaj_naglowka r;
 	char *napis = NULL;
 	char *dane;
-	size_t UDP_MTU = 1600;
 	if (sscanf(wiadomosc, "DATA %"SCNd32" %"SCNd32" %"SCNd32"\n",
 		   &nr, &ack, &win) != 3) {
 		return 0;
 	}
+	if ((*ostatnio_odebrany_nr) + 1 >= nr - RETRANSMIT) {
+		dane = zrob_naglowek(RETRANSMIT,
+				     (*ostatnio_odebrany_nr) + 1, -1, -1, 0);
+		write(gniazdo, dane, strlen(dane));
+		free(dane);
+	} else {
+		dane = strchr(wiadomosc, '\n');
+		++dane;
+		ile_danych -= dane - wiadomosc;
+		(*ostatnio_odebrany_nr) = nr;
+		if (ile_danych <= 0) {
+			free(napis);
+			return -1;
+		}
+		if (write(STDOUT_FILENO, dane, ile_danych) != ile_danych)
+			syserr("Nie da się pisać na stdout.");
+	}
 	paczka_danych_wynik = zrob_paczke_danych(win, ack, &napis);
-	if (paczka_danych_wynik == 1) {
+	if (paczka_danych_wynik > 0) {
 		wynik = write(gniazdo, napis, paczka_danych_wynik);
 		(*ostatnio_odebrany_ack) = ack;
 		free(napis);
 		napis = NULL;
 		if (wynik <= 0)
 			return -1;
-	} else if (paczka_danych_wynik == BLAD_CZYTANIA) {
-		free(napis);
+	} else {
 		return 0;
 	}
-	dane = strchr(wiadomosc, '\n');
-	++dane;
-	if ((*ostatnio_odebrany_nr) + 1 >= nr - RETRANSMIT) {
-		dane = zrob_naglowek(RETRANSMIT,
-				     (*ostatnio_odebrany_nr) + 1, -1,
-				     -1, 0);
-		write(gniazdo, dane, strlen(dane));
-		free(dane);
-	} else {
-		ile_danych = dane - wiadomosc;
-		(*ostatnio_odebrany_nr) = nr;
-		if (ile_danych <= 0) {
-			free(napis);
-			return -1;
-		}
-		if (write(STDOUT_FILENO, dane, ile_danych)
-		    != ile_danych)
-			syserr("Nie da się pisać na stdout.");
-	}
-	free(napis);
-	return 0;
 }
 
 int obsluz_ack(const evutil_socket_t gniazdo, const char *const naglowek,

@@ -45,6 +45,6 @@ void mixer(struct mixer_input *inputs, size_t n, void *output_buf,
 	for (i = 0; i < n; ++i)
 		i[inputs].consumed = 0;
 	for (i = 0; i < (*output_size); ++i)
-		i[wynik] = zsumuj_wartosci(inputs, n, i);
+		wynik[i] = zsumuj_wartosci(inputs, n, i);
 	(*output_size) *= sizeof(int16_t);
 }
