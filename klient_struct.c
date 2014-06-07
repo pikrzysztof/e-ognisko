@@ -66,7 +66,7 @@ static klient *zrob_klienta(const evutil_socket_t deskryptor)
 		return NULL;
 	k->adres = NULL;
 	k->port = NULL;
-	k->min_rozmiar_ostatnio = SIZE_MAX;
+	k->min_rozmiar_ostatnio = daj_FIFO_SIZE();
 	k->max_rozmiar_ostatnio = 0;
 	k->spodziewany_nr_paczki = 0;
 	k->kolejka = init_FIFO();
@@ -111,19 +111,20 @@ char *SITREP(klient *const o_kim)
 	}
 	const size_t MAX_ROZMIAR_WYNIKU = 100;
 	char *wynik = malloc(MAX_ROZMIAR_WYNIKU);
-	size_t min_rozmiar = o_kim->min_rozmiar_ostatnio == SIZE_MAX ?
-		0 : o_kim->min_rozmiar_ostatnio;
+	if (o_kim->min_rozmiar_ostatnio == SIZE_MAX)
+		debug("max rozmiar.");
+	uaktualnij_wartosci_sitrepu(o_kim);
 	if (wynik == NULL)
 		return NULL;
 	if (sprintf(wynik, "%s:%s FIFO: %zu/%zu (min. %zu, max. %zu)\n",
 		    o_kim->adres, o_kim->port,
 		    o_kim->kolejka->liczba_zuzytych_bajtow,
-		    daj_FIFO_SIZE(), min_rozmiar,
+		    daj_FIFO_SIZE(), o_kim->min_rozmiar_ostatnio,
 		    o_kim->max_rozmiar_ostatnio) <= 0) {
 		free(wynik);
 		wynik = NULL;
 	}
-	o_kim->min_rozmiar_ostatnio = SIZE_MAX;
+	o_kim->min_rozmiar_ostatnio = daj_FIFO_SIZE();
 	o_kim->max_rozmiar_ostatnio = 0;
 	return wynik;
 }
@@ -198,6 +199,7 @@ static size_t zlokalizuj_po_nr_klienckim(const int32_t numer_kliencki,
 	return MAX_KLIENTOW;
 }
 
+
 void dodaj_adresy(const int32_t numer_kliencki, struct sockaddr_in6 *adres,
 		  klient **const klienci, const size_t MAX_KLIENTOW)
 {
@@ -210,6 +212,7 @@ void dodaj_adresy(const int32_t numer_kliencki, struct sockaddr_in6 *adres,
 		usun(klienci[idx_klienta]);
 		klienci[idx_klienta] = NULL;
 	}
+	debug("%i potwierdził numer", klienci[idx_klienta]->numer_kliencki);
 	klienci[idx_klienta]->potwierdzil_numer = true;
 	klienci[idx_klienta]->adres_udp.sin6_family = adres->sin6_family;
 	klienci[idx_klienta]->adres_udp.sin6_family = adres->sin6_family;
@@ -234,13 +237,17 @@ void dodaj_adresy(const int32_t numer_kliencki, struct sockaddr_in6 *adres,
 		      numer_kliencki);
 		usun(klienci[idx_klienta]);
 		klienci[idx_klienta] = NULL;
+		return;
 	}
-	if (inet_ntop(klienci[idx_klienta]->adres_udp.sin6_family,
-		      &(klienci[idx_klienta]->adres_udp),
-		      klienci[idx_klienta]->adres,
+	if (inet_ntop(AF_INET6, adres, klienci[idx_klienta]->adres,
 		      sizeof(klienci[idx_klienta]->adres_udp)) == NULL) {
+		debug("nie mogłem pobrać adresu, wywalam gościa.");
+		debug("%s", klienci[idx_klienta]->adres);
 		usun(klienci[idx_klienta]);
 		klienci[idx_klienta] = NULL;
+		return;
+	} else {
+		debug("pobrałem adres od gościa, fajnie");
 	}
 	klienci[idx_klienta]->czas = clock();
 }
@@ -275,10 +282,13 @@ void dodaj_klientowi_dane(void *bufor, size_t ile_danych,
 	}
 	klienci[idx]->czas = clock();
 	++(klienci[idx]->spodziewany_nr_paczki);
-	klienci[idx]->min_rozmiar_ostatnio =
-		min(klienci[idx]->min_rozmiar_ostatnio,
-		    klienci[idx]->kolejka->liczba_zuzytych_bajtow);
-	klienci[idx]->max_rozmiar_ostatnio =
-		max(klienci[idx]->max_rozmiar_ostatnio,
-		    klienci[idx]->kolejka->liczba_zuzytych_bajtow);
+	uaktualnij_wartosci_sitrepu(klienci[idx]);
+}
+
+void uaktualnij_wartosci_sitrepu(klient *const k)
+{
+	k->min_rozmiar_ostatnio = min(k->min_rozmiar_ostatnio,
+				      k->kolejka->liczba_zuzytych_bajtow);
+	k->max_rozmiar_ostatnio = max(k->max_rozmiar_ostatnio,
+				      k->kolejka->liczba_zuzytych_bajtow);
 }

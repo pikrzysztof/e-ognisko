@@ -23,7 +23,7 @@ static ssize_t zrob_paczke_danych(const size_t okno,
 	(*napis) = malloc(MTU);
 	if (*napis == NULL)
 		syserr("Mało pamięci.");
-	if (nr_paczki == 0) {
+	if (nr_paczki == 0 && !pytal_o_taki) {
 		/* Inicjalizacja wszystkiego, na razie nic. */
 		debug("poproszono o 0 paczke");
 	} else if (nr_paczki == ostatnio_wyslany_nr && pytal_o_taki) {
@@ -57,7 +57,6 @@ static ssize_t zrob_paczke_danych(const size_t okno,
 	if (ile_wczytano <= 0) {
 		free(ostatnio_wyslany_pakiet);
 		ostatnio_wyslany_pakiet = NULL;
-		debug("Linia %i", __LINE__);
 		return 0;
 	}
 	ostatnio_wyslany_nr = nr_paczki;

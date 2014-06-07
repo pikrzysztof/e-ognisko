@@ -164,5 +164,6 @@ void odejmij_ludziom(klient **klienci, struct mixer_input *inputs,
 		usun_poczatek(klienci[i]->kolejka,
 			      inputs[aktywni].consumed);
 		++aktywni;
+		uaktualnij_wartosci_sitrepu(klienci[i]);
 	}
 }

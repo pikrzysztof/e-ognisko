@@ -50,7 +50,6 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 	}
 	ile_przyszlo = read(gniazdo_tcp, tmp, MAX_ROZMIAR);
 	if (ile_przyszlo <= 0) {
-		perror("Coś dziwnego od serwera.");
 		free(tmp);
 		skoncz_petle((struct event_base *) baza_zdarzen,
 			     "Serwer daje dziwne rzeczy.");

@@ -42,8 +42,9 @@ extern void dodaj_adresy(const int32_t numer_kliencki,
 /* 		  const size_t MAX_KLIENTOW); */
 
 extern void dodaj_klientowi_dane(void *bufor, size_t ile_danych,
-				 struct sockaddr_in6 *adres, klient **const klienci,
+				 struct sockaddr_in6 *adres,
+				 klient **const klienci,
 				 const size_t MAX_KLIENTOW);
 
-
+extern void uaktualnij_wartosci_sitrepu(klient *const k);
 #endif

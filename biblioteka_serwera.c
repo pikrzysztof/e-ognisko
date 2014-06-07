@@ -291,14 +291,16 @@ static void retransmit(char *bufor, size_t ile_danych,
 	size_t idx_klienta = podaj_indeks_klienta(adres, klienci, MAX_KLIENTOW);
 	char *tmp;
 	size_t i, ostatnia_wiadomosc;
-	int32_t nr, win, ack;
+	int32_t nr;
 	if (hist->tablica_wpisow[hist->glowa] == NULL) {
 		info("Ktoś nas poprosił o retransmisje a "
 		     "my mamy pustą historię.");
 		return;
 	}
-	if (wyskub_dane_z_naglowka(bufor, &nr, &ack, &win) != 0)
+	if (scanf("RETRANSMIT %"SCNd32"\n", &nr) != 1) {
+		info("Lewy nagłówek.");
 		return;
+	}
 	ostatnia_wiadomosc = hist->tablica_wpisow[hist->glowa]->numer_pakietu;
 	for (i = nr; i <= ostatnia_wiadomosc; ++i) {
 		if (wyslij_paczke(klienci[idx_klienta], gniazdo_udp, i, hist)
