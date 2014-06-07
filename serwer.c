@@ -44,13 +44,10 @@ void zakolejkuj(struct event *zdarzenie, short flagi,
 		const struct timeval *const czas,
 		const char *const errmsg)
 {
-	/* info("Kolejkujemy %s", errmsg); */
 	if (!event_pending(zdarzenie, flagi, NULL)) {
 		if (event_add(zdarzenie, czas) != 0) {
 			syserr(errmsg);
 		}
-	} else {
-		/* info("Zdarzenie %s jest już w kolejce.", errmsg); */
 	}
 }
 
@@ -76,11 +73,9 @@ void sprawdz_klientow()
 		zakolejkuj(udp_wysylanie_danych, EV_TIMEOUT | EV_PERSIST,
 			   &czestotliwosc_danych,
 			   "Nie udało się zakolejkować wysyłania po UDP.");
-		info("HEJHO kolejkujemy");
 	} else {
 		wykolejkuj(udp_wysylanie_danych,
 			 "Nie udało się wykolejkować wysyłania danych po UDP.");
-		info("WYWALAM");
 	}
 	if (polaczeni + aktywni > 0) {
 		zakolejkuj(tcp_wysylanie_raportu, EV_TIMEOUT | EV_PERSIST,
@@ -118,7 +113,6 @@ void wyslij_dane_udp(evutil_socket_t nic, short flagi,
 		    klienci[i]->kolejka->stan == ACTIVE)
 			++aktywni;
 	}
-	info("Wyślij dane UDP");
 	if (wynik == NULL)
 		syserr("Zabrakło pamięci.");
 	mixer(inputs, aktywni, wynik, &dlugosc_wyniku, TX_INTERVAL);
@@ -130,18 +124,17 @@ void wyslij_dane_udp(evutil_socket_t nic, short flagi,
 	++numer_paczki;
 	free(wynik);
 	free(inputs);
-	info("wyslij dane udp sprawdz klientow");
 	sprawdz_klientow();
 }
 
 void udp_czytanie(evutil_socket_t gniazdo_udp, short flagi, void *nic)
 {
 	void *bufor = malloc(MTU);
-	struct sockaddr adres;
+	struct sockaddr_in6 adres;
 	socklen_t dlugosc_adresu = sizeof(adres);
-	ssize_t ile_danych = recvfrom(gniazdo_udp, bufor, MTU,
-				      MSG_DONTWAIT,
-				      &adres, &dlugosc_adresu);
+	ssize_t ile_danych = recvfrom(gniazdo_udp, bufor, MTU, MSG_DONTWAIT,
+				      (struct sockaddr *)&adres,
+				      &dlugosc_adresu);
 	/* info("UDP czytnaie"); */
 	if (ile_danych <= 0) {
 		syserr("Recv po udp się nie powiodło.");
@@ -150,7 +143,6 @@ void udp_czytanie(evutil_socket_t gniazdo_udp, short flagi, void *nic)
 			      (struct sockaddr_in6 *) &adres, klienci,
 			      MAX_KLIENTOW, gniazdo_udp, hist);
 	free(bufor);
-	info("udp czytanie spr klientow");
 	sprawdz_klientow();
 }
 

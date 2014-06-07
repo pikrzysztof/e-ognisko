@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <netinet/ip.h>
 #include <sys/types.h>
 #include "klient_struct.h"
@@ -110,12 +111,14 @@ char *SITREP(klient *const o_kim)
 	}
 	const size_t MAX_ROZMIAR_WYNIKU = 100;
 	char *wynik = malloc(MAX_ROZMIAR_WYNIKU);
+	size_t min_rozmiar = o_kim->min_rozmiar_ostatnio == SIZE_MAX ?
+		0 : o_kim->min_rozmiar_ostatnio;
 	if (wynik == NULL)
 		return NULL;
 	if (sprintf(wynik, "%s:%s FIFO: %zu/%zu (min. %zu, max. %zu)\n",
 		    o_kim->adres, o_kim->port,
 		    o_kim->kolejka->liczba_zuzytych_bajtow,
-		    daj_FIFO_SIZE(), o_kim->min_rozmiar_ostatnio,
+		    daj_FIFO_SIZE(), min_rozmiar,
 		    o_kim->max_rozmiar_ostatnio) <= 0) {
 		free(wynik);
 		wynik = NULL;
@@ -246,23 +249,36 @@ void dodaj_klientowi_dane(void *bufor, size_t ile_danych,
 			  struct sockaddr_in6 *adres, klient **const klienci,
 			  const size_t MAX_KLIENTOW)
 {
-	size_t idx_klienta = podaj_indeks_klienta(adres, klienci, MAX_KLIENTOW);
+	size_t idx = podaj_indeks_klienta(adres, klienci, MAX_KLIENTOW);
 	int32_t nr, ack, win;
-	if (idx_klienta >= MAX_KLIENTOW)
+	long long int nrLL;
+	if (idx >= MAX_KLIENTOW)
 		return;
-	wyskub_dane_z_naglowka(bufor, &nr, &ack, &win);
-	long long int nrLL = nr;
-	if (klienci[idx_klienta]->spodziewany_nr_paczki != nrLL) {
-		usun(klienci[idx_klienta]);
-		klienci[idx_klienta] = NULL;
+	if (sscanf(bufor, "UPLOAD %"SCNd32"\n", &nr) != 1)
+		nr = -30;
+	nrLL = nr;
+	if (klienci[idx]->spodziewany_nr_paczki != nrLL) {
+		info("Spodziewany numer paczki się nie zgadza, dostaliśmy %i"
+		     " a powinno być %i", nrLL,
+		     klienci[idx]->spodziewany_nr_paczki);
+		usun(klienci[idx]);
+		klienci[idx] = NULL;
+		return;
 	}
-	if (!klienci[idx_klienta]->potwierdzil_numer ||
-	    dodaj(klienci[idx_klienta]->kolejka, bufor, ile_danych) != 0) {
+	if (!klienci[idx]->potwierdzil_numer ||
+	    dodaj(klienci[idx]->kolejka, bufor, ile_danych) != 0) {
 		info("Klient %"SCNd32" dał za dużo danych, wywalamy go.",
-		     klienci[idx_klienta]->numer_kliencki);
-		usun(klienci[idx_klienta]);
-		klienci[idx_klienta] = NULL;
+		     klienci[idx]->numer_kliencki);
+		usun(klienci[idx]);
+		klienci[idx] = NULL;
+		return;
 	}
-	klienci[idx_klienta]->czas = clock();
-	++(klienci[idx_klienta]->spodziewany_nr_paczki);
+	klienci[idx]->czas = clock();
+	++(klienci[idx]->spodziewany_nr_paczki);
+	klienci[idx]->min_rozmiar_ostatnio =
+		min(klienci[idx]->min_rozmiar_ostatnio,
+		    klienci[idx]->kolejka->liczba_zuzytych_bajtow);
+	klienci[idx]->max_rozmiar_ostatnio =
+		max(klienci[idx]->max_rozmiar_ostatnio,
+		    klienci[idx]->kolejka->liczba_zuzytych_bajtow);
 }

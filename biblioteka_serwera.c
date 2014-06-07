@@ -139,7 +139,6 @@ static int wyslij_wiadomosc(char *wiadomosc, size_t rozmiar, klient *kli,
 	if (deskryptor == -1) {
 		if (send(kli->deskryptor_tcp, wiadomosc, rozmiar,
 			 MSG_NOSIGNAL | MSG_DONTWAIT) != rozmiar) {
-			info("Usunęliśmy klienta bo słabo działał.");
 			return -1;
 		}
 	} else {
@@ -149,8 +148,6 @@ static int wyslij_wiadomosc(char *wiadomosc, size_t rozmiar, klient *kli,
 			   MSG_DONTWAIT | MSG_NOSIGNAL,
 			   (struct sockaddr *) &(kli->adres_udp),
 			   sizeof(struct sockaddr_in6)) != rozmiar) {
-			/* usun(kli); */
-			info("Usunęliśmy klienta bo słabo działał.");
 			return -1;
 		}
 	}
@@ -245,11 +242,10 @@ static void wyslij_acka(struct sockaddr_in6* adres, evutil_socket_t gniazdo_udp,
 		info("Nie udało się znaleźć takiego klienta, co mi tu dajecie!");
 		return;
 	}
-	okno = daj_FIFO_SIZE() -
-		klienci[idx_klienta]->kolejka->liczba_zuzytych_bajtow;
-	odpowiedz = zrob_naglowek(ACK,
+	okno = daj_win(klienci[idx_klienta]->kolejka);
+	odpowiedz = zrob_naglowek(ACK, -1,
 				  klienci[idx_klienta]->spodziewany_nr_paczki,
-				  -1, okno, rozmiar_danych);
+				  okno, rozmiar_danych);
 	if (odpowiedz == NULL) {
 		info("Nie udało się wysłać ACK, bo zabrakło pamięci.");
 		return;
@@ -405,7 +401,7 @@ void wyslij_wiadomosci(const void *const dane, const size_t ile_danych,
 		wiadomosc = malloc(MTU);
 		if (wiadomosc == NULL)
 			syserr("Zabrakło pamięci.");
-		/* write(STDIN_FILENO, dane, ile_danych); */
+		/* write(STDOUT, dane, ile_danych); */
 		rozmiar_paczki = sprintf(wiadomosc,
 					 "DATA %"SCNd32" %"SCNd32" %"SCNd32"\n",
 					 numer_paczki,
@@ -419,14 +415,11 @@ void wyslij_wiadomosci(const void *const dane, const size_t ile_danych,
 			      MSG_NOSIGNAL | MSG_DONTWAIT,
 			      (struct sockaddr *) &(klienci[i]->adres_udp),
 			      sizeof(klienci[i]->adres_udp));
-		debug("wynik sendto %i", tmp2);
 		if (tmp2 != rozmiar_paczki) {
 			info("Nie udało się wysłać do klienta %"SCNd32
 			     ", więc go usuwamy.", klienci[i]->numer_kliencki);
 			usun(klienci[i]);
 			klienci[i] = NULL;
-		} else {
-			debug("udało się wysłać");
 		}
 		free(wiadomosc);
 	}

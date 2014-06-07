@@ -20,7 +20,6 @@ static const bool DEBUG = false;
 #endif
 
 /* Takim oto sposobem będzie zawsze różne od EOF i 0. */
-const ssize_t BLAD_CZYTANIA = EOF + 1 >= 0 ? -5 : EOF + 1;
 const char *const OZNACZENIE_PARAMETRU_PORTU = "-p";
 const char *const DOMYSLNY_NUMER_PORTU = "12534";
 const size_t MTU = 2000;

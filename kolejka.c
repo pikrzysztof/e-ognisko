@@ -6,6 +6,7 @@
 /* kodowanie UTF-8 */
 
 #include "kolejka.h"
+#include <unistd.h>
 #include "klient_struct.h"
 #include "mikser.h"
 #include <string.h>
@@ -116,13 +117,20 @@ size_t daj_FIFO_SIZE()
 	return FIFO_SIZE;
 }
 
-int dodaj(FIFO *fifo, void *dane, size_t rozmiar_danych)
+int dodaj(FIFO *const fifo, void *dane, size_t rozmiar_danych)
 {
-	if (daj_FIFO_SIZE() - (fifo->liczba_zuzytych_bajtow) < rozmiar_danych)
+	char *tmp = dane;
+	tmp = strchr(dane, '\n');
+	++tmp;
+	rozmiar_danych -= tmp - (char *)dane;
+	if (daj_FIFO_SIZE() - (fifo->liczba_zuzytych_bajtow) < rozmiar_danych) {
+		debug("za dużo danych");
 		return -1;
+	}
 	memcpy(((char *) (fifo->kolejka)) + fifo->liczba_zuzytych_bajtow,
 	       dane, rozmiar_danych);
 	fifo->liczba_zuzytych_bajtow += rozmiar_danych;
+	ustaw_wodnego_Marka(fifo);
 	return 0;
 }
 
