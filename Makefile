@@ -35,16 +35,16 @@
 # od razu wyliczaja swoja wartosc.  Podstawienie poprzez = daje nam zmienna
 # leniwa, ktora w miejscu gdzie zostanie wykorzystana wstawi swa definicje
 # zywcem.
-
+#-Wuseless-cast, -Wzero-as-null-pointer-constant
 CC           := gcc
-CDEBUGFLAGS  := -ggdb3 -D _DEBUG -O2
-LDDEBUGFLAGS := -ggdb3 -D _DEBUG -O2
+CDEBUGFLAGS  := -ggdb3 -D _DEBUG -O0
+LDDEBUGFLAGS := -ggdb3 -D _DEBUG -O0
 CRELEASEFLAGS:= -D NDEBUG -O2
 LDRELEASEFLAGS:= -D NDEBUG -O2
 SOURCES      := $(wildcard *.c)
 COMMONLDFLAGS := -levent -pthread
 COMMONCFLAGS := -c
-COMMONFLAGS := -Wall -Wextra -pedantic -std=c99 -Wuseless-cast -Wzero-as-null-pointer-constant -Wcast-align -Wcast-qual -Wformat=2 -Winit-self -Wlogical-op -Wmissing-include-dirs -Wredundant-decls -Wshadow -Wsign-conversion -Wswitch-default -Wundef
+CF := -Wall -Wextra -pedantic -std=c99  -Wcast-align -Wcast-qual -Wformat=2 -Winit-self -Wlogical-op -Wmissing-include-dirs -Wredundant-decls -Wshadow -Wsign-conversion -Wswitch-default -Wundef -Wreturn-type -D_POSIX_C_SOURCE=200112L
 
 ifeq ($(debuglevel), 1)
     LDFLAGS = $(LDDEBUGFLAGS)
@@ -69,11 +69,11 @@ OBJECTS	    := $(filter-out $(MAINOBJECTS),$(ALLOBJECTS))
 all: $(DEPENDS) $(ALL) Makefile tags
 
 $(DEPENDS) : %.d : %.c				# tworzenie submakefiles
-	@$(CC) -MM $< > $@			# 	- zaleznosc
-	@echo -e: "\t"$(CC) $(CFLAGS) $(COMMONCFLAGS) $(COMMONFLAGS) $< >> $@	#	- polecenie kompilacji
+	$(CC) -MM $< > $@			# 	- zaleznosc
+	$(CC) $(CFLAGS) $(COMMONCFLAGS) $(CF) $< >> $@	#	- polecenie kompilacji
 
 $(ALL) : % : %.o $(OBJECTS)			# konsolidacja
-	@$(CC) $(LDFLAGS) $(COMMONLDFLAGS) $(COMMONFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) $(COMMONLDFLAGS) $(CF) -o $@ $^
 
 -include $(DEPENDS)				# dolaczenie submakefiles
 

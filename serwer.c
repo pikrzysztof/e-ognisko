@@ -8,7 +8,6 @@
 #include "biblioteka_serwera.h"
 #include "kolejka.h"
 #include "wspolne.h"
-#include "bufor_wychodzacych.h"
 #include "klient_struct.h"
 #include "mikser.h"
 #include "historia.h"
@@ -108,6 +107,8 @@ void wyslij_dane_udp(evutil_socket_t nic, short flagi,
 	const size_t ILE_DANYCH = 176 * TX_INTERVAL;
 	void *wynik = malloc(ILE_DANYCH);
 	size_t dlugosc_wyniku = ILE_DANYCH;
+	unused(flagi);
+	unused(nic);
 	for (i = 0, aktywni = 0; i < MAX_KLIENTOW; ++i) {
 		if (klienci[i] != NULL && klienci[i]->potwierdzil_numer &&
 		    klienci[i]->kolejka->stan == ACTIVE)
@@ -120,7 +121,7 @@ void wyslij_dane_udp(evutil_socket_t nic, short flagi,
 	wyslij_wiadomosci(wynik, dlugosc_wyniku,
 			  *((evutil_socket_t *) gniazdo_udp), klienci,
 			  MAX_KLIENTOW, numer_paczki);
-	dodaj_wpis(hist, numer_paczki, wynik, dlugosc_wyniku);
+	dodaj_wpis(hist, (size_t) numer_paczki, wynik, dlugosc_wyniku);
 	++numer_paczki;
 	free(wynik);
 	free(inputs);
@@ -135,11 +136,12 @@ void udp_czytanie(evutil_socket_t gniazdo_udp, short flagi, void *nic)
 	ssize_t ile_danych = recvfrom(gniazdo_udp, bufor, MTU, MSG_DONTWAIT,
 				      (struct sockaddr *)&adres,
 				      &dlugosc_adresu);
-	/* info("UDP czytnaie"); */
+	unused(flagi);
+	unused(nic);
 	if (ile_danych <= 0) {
-		syserr("Recv po udp się nie powiodło.");
+		syserr("Recv po udp się nie powiodło");
 	}
-	ogarnij_wiadomosc_udp(bufor, ile_danych,
+	ogarnij_wiadomosc_udp(bufor, (size_t) ile_danych,
 			      (struct sockaddr_in6 *) &adres, klienci,
 			      MAX_KLIENTOW, gniazdo_udp, hist);
 	free(bufor);
@@ -151,8 +153,9 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi, void *nic)
 	struct sockaddr addr;
 	evutil_socket_t deskryptor;
 	socklen_t dlugosc = sizeof(addr);
+	unused(nic);
+	unused(flagi);
 	info("CZytaj i reaguj TCP");
-	/* assert(liczba_klientow < MAX_KLIENTOW); */
 	deskryptor = accept(gniazdo_tcp, &addr, &dlugosc);
 	if (deskryptor == -1) {
 		info("Błąd w przyjmowaniu połączenia.");
@@ -168,7 +171,9 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi, void *nic)
 void wyslij_raporty(evutil_socket_t nic, short flagi, void* zero)
 {
 	char *raport = przygotuj_raport_grupowy(klienci, MAX_KLIENTOW);
-	info("Wyślij raporty!");
+	unused(nic);
+	unused(zero);
+	unused(flagi);
 	if (raport == NULL) {
 		perror("Nie da się przygotować raportu o klientach.");
 		return;
@@ -193,7 +198,6 @@ int main(int argc, char **argv)
 		syserr("Nie mozna zrobic tablicy klientow.");
 	ustaw_rozmiar_fifo(argc, argv);
 	init_wodnego_Marka(argc, argv);
-	ustaw_rozmiar_wychodzacych(argc, argv);
 	port = daj_opcje(OZNACZENIE_PARAMETRU_PORTU, argc, argv);
 	if (port == NULL)
 		port = DOMYSLNY_NUMER_PORTU;
@@ -202,7 +206,7 @@ int main(int argc, char **argv)
 			fatal("Jakiś lewy port.");
 	TX_INTERVAL = daj_tx_interval(argc, argv);
 	czestotliwosc_danych.tv_sec = 0;
-	czestotliwosc_danych.tv_usec = TX_INTERVAL * 1000;
+	czestotliwosc_danych.tv_usec = (__suseconds_t) (TX_INTERVAL * 1000);
 	gniazdo_tcp = zrob_i_przygotuj_gniazdo(port, SOCK_STREAM);
 	gniazdo_udp = zrob_i_przygotuj_gniazdo(port, SOCK_DGRAM);
 	for (i = 0; i < MAX_KLIENTOW; ++i) {
@@ -229,7 +233,7 @@ int main(int argc, char **argv)
 	udp_wysylanie_danych = event_new(baza_zdarzen, -1,
 					 EV_PERSIST | EV_TIMEOUT,
 					 wyslij_dane_udp, &gniazdo_udp);
-	if (wyslij_dane_udp == NULL || tcp_czytanie == NULL ||
+	if (tcp_czytanie == NULL ||
 	    tcp_wysylanie_raportu == NULL ||
 	    udp_wysylanie_danych == NULL)
 		syserr("Nie udało się zrobić zdarzeń.");

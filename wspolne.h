@@ -7,15 +7,18 @@
 #ifndef WSPOLNE_H_
 #define WSPOLNE_H_
 
+#include <stddef.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <inttypes.h>
+#include <sys/types.h>
 
 #define wypisz_linie debug("%i", __LINE__)
+#define unused(x) (void)(x)
+
 
 const char *const OZNACZENIE_PARAMETRU_PORTU;
 const char *const DOMYSLNY_NUMER_PORTU;
-const ssize_t BLAD_CZYTANIA;
 const size_t MTU;
 
 typedef enum naglowek {
@@ -28,7 +31,7 @@ typedef enum naglowek {
 	INNY
 } rodzaj_naglowka;
 
-extern char *const zrob_naglowek(const rodzaj_naglowka r,
+extern char* zrob_naglowek(const rodzaj_naglowka r,
 				 const int32_t nr, const int32_t ack,
 				 const int32_t win,
 				 const size_t rozmiar_wyniku);
@@ -44,8 +47,8 @@ extern bool wlasciwy_port(const char *const number);
 
 /* Znajduje wpis */
 extern const char* daj_opcje(const char *const nazwa_opcji,
-			     const int rozmiar_tablicy_opcji,
-			     char *const *const tablica_opcji);
+		       const int rozmiar_tablicy_opcji,
+		       char *const *const tablica_opcji);
 
 /* Sprawdza, czy podany napis przedstawia adres IPv6 */
 extern bool jest_ipv6(const char *const domniemany_adres);
@@ -84,17 +87,15 @@ extern void konkatenacja(char *const pierwszy, const char *const drugi,
 
 /* Czyta z deskryptora dopóki nie dostanie końca linii */
 /* albo nie skończy się bufor. */
-/* Jako wynik daje ile przeczytał bajtów. */
-/* Jeśli wejście się skończy daje EOF. */
-/* Jeśli jest bład daje BLAD_CZYTANIA. */
+/* Jako wynik daje ile przeczytał bajtów. albo cos bezsensownego */
 /* Ciag znakow zawsze konczy sie '\0', wiec wczyta o 1 mniej niz bufor. */
 extern ssize_t czytaj_do_konca_linii(const int deskryptor,
 				     char *const bufor,
 				     const ssize_t rozmiar_bufora);
 
-extern int max(const int a, const int b);
+extern size_t max(const size_t a, const size_t b);
 
-extern int min(const int a, const int b);
+extern size_t min(const size_t a, const size_t b);
 
 /* Czyta z deskryptora cala linie tekstu,  */
 extern ssize_t czytaj_do_vectora(const int deskryptor, char **wynik);

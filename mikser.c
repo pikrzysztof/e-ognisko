@@ -6,7 +6,6 @@
 static int16_t wez_wartosc(struct mixer_input *const input,
 			   const size_t ktora_liczba)
 {
-	/* size_t dlugosc_tablicy = input->len / 2; */
 	int16_t *tablica = input->data;
 	if (input->len >= 23524985)
 		debug("tu");

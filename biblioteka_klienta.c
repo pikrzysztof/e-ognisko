@@ -1,67 +1,64 @@
 #include <errno.h>
 #include "biblioteka_klienta.h"
 #include "wspolne.h"
+#include "err.h"
 size_t RETRANSMIT_LIMIT;
 
- /* Daje EOF jak jest EOF, liczba bajtow do wyslania, jak sie udalo, */
- /* BLAD_CZYTANIA jak jest blad. */
 static ssize_t zrob_paczke_danych(const size_t okno,
 				  const int32_t nr_paczki,
 				  char **napis)
 {
 	const size_t MAX_ROZMIAR_DANYCH = 1400;
-	static bool koniec_wejscia;
 	static int32_t ostatnio_wyslany_nr;
 	static char* ostatnio_wyslany_pakiet;
 	static ssize_t ostatni_wynik;
 	static bool pytal_o_taki;
-	size_t rozmiar;
 	char *poczatek_danych;
 	ssize_t ile_wczytano;
 	int errtmp;
 	const size_t MIN_ROZMIAR = 30;
 	(*napis) = malloc(MTU);
-	if (*napis == NULL)
-		syserr("Mało pamięci.");
-	if (nr_paczki == 0 && !pytal_o_taki) {
-		/* Inicjalizacja wszystkiego, na razie nic. */
-		debug("poproszono o 0 paczke");
-	} else if (nr_paczki == ostatnio_wyslany_nr && pytal_o_taki) {
-		/* Ponowne przesłanie danych. */
-		memcpy(*napis, ostatnio_wyslany_pakiet, ostatni_wynik);
-		debug("znowu ta sama paczka.");
-		return ostatni_wynik;
-	} else  if (nr_paczki == ostatnio_wyslany_nr) {
-		/* Pierwsze nie potwierdzenie ostatniej paczki. */
-		pytal_o_taki = true;
-		free(*napis);
-		debug("linia %i", __LINE__);
-		return 0;
-	}
-	/* Serwer chce nowy pakiet. */
-	pytal_o_taki = false;
-	free(ostatnio_wyslany_pakiet);
-	ostatnio_wyslany_pakiet = zrob_naglowek(UPLOAD, nr_paczki, -1, -1,
-						MIN_ROZMIAR +
-						min(okno, MAX_ROZMIAR_DANYCH));
-	if (ostatnio_wyslany_pakiet == NULL)
-		syserr("Pamięci brakuje.");
-	poczatek_danych = strchr(ostatnio_wyslany_pakiet, '\n');
-	++poczatek_danych;
-	ostatni_wynik = strlen(ostatnio_wyslany_pakiet);
-	errtmp = errno;
-	ile_wczytano = read(STDIN_FILENO, poczatek_danych,
-			    min(okno, MAX_ROZMIAR_DANYCH));
-	errno = errtmp;
-	ostatni_wynik += ile_wczytano;
-	if (ile_wczytano <= 0) {
+	if (nr_paczki == ostatnio_wyslany_nr + 1 || nr_paczki == 0) {
+		pytal_o_taki = false;
 		free(ostatnio_wyslany_pakiet);
-		ostatnio_wyslany_pakiet = NULL;
-		return 0;
+		ostatnio_wyslany_pakiet =
+			zrob_naglowek(UPLOAD, nr_paczki, -1, -1, MIN_ROZMIAR +
+				      min(okno, MAX_ROZMIAR_DANYCH));
+		if (ostatnio_wyslany_pakiet == NULL)
+			syserr("Brakuje pamięci.");
+		poczatek_danych = strchr(ostatnio_wyslany_pakiet, '\n');
+		++poczatek_danych;
+		/* Nie chcemy robić sobie złego errno z powodu tego kawałka. */
+		errtmp = errno;
+		ile_wczytano = read(STDIN_FILENO, poczatek_danych,
+				    min(okno, MAX_ROZMIAR_DANYCH));
+		errno = errtmp;
+		if (ile_wczytano <= 0) {
+			free(ostatnio_wyslany_pakiet);
+			free(*napis);
+			*napis = NULL;
+			ostatnio_wyslany_pakiet = NULL;
+			return 0;
+		}
+		ostatni_wynik = ile_wczytano +
+			(poczatek_danych - ostatnio_wyslany_pakiet);
+		memcpy(*napis, ostatnio_wyslany_pakiet, (size_t) ostatni_wynik);
+		ostatnio_wyslany_nr = nr_paczki;
+		return ostatni_wynik;
+	} else if (ostatnio_wyslany_nr == nr_paczki) {
+		debug("%"SCNd32" nie doszedł ostatnio", ostatnio_wyslany_nr);
+		if (!pytal_o_taki) {
+			pytal_o_taki = true;
+			free(*napis);
+			return 0;
+		} else {
+			pytal_o_taki = false;
+			memcpy(*napis, ostatnio_wyslany_pakiet,
+			       (size_t) ostatni_wynik);
+			return ostatni_wynik;
+		}
 	}
-	ostatnio_wyslany_nr = nr_paczki;
-	memcpy((*napis), ostatnio_wyslany_pakiet, ostatni_wynik);
-	return ostatni_wynik;
+	return -1;
 }
 
 void wyczysc(evutil_socket_t *deskryptor,
@@ -112,13 +109,11 @@ static void wypisz(const char *const dane_z_naglowkiem, size_t rozmiar)
 	if (tmp == NULL)
 		return;
 	++tmp;
-	ile_binarnych = rozmiar - (tmp - dane_z_naglowkiem);
-	if (write(STDOUT_FILENO, tmp, ile_binarnych) != ile_binarnych)
+	ile_binarnych = rozmiar - (size_t) (tmp - dane_z_naglowkiem);
+	if (write(STDOUT_FILENO, tmp, ile_binarnych) != (ssize_t) ile_binarnych)
 		syserr("Write się nie udał.");
 }
 
-/* Daje BLAD_CZYTANIA jak cos sie nie uda, EOF jak jest koniec pliku, */
-/* 0 jak sie uda. */
 int daj_dane_serwerowi(const int deskryptor,
 		       const int numer_paczki, const size_t okno)
 {
@@ -127,26 +122,26 @@ int daj_dane_serwerowi(const int deskryptor,
 	char *const tekst = malloc(okno + DLUGOSC_POCZATKU);
 	ssize_t ile_przeczytane;
 	if (tekst == NULL)
-		return BLAD_CZYTANIA;
+		return 0;
 	if (sprintf(tekst, "%s%i\n", POCZATEK_KOMUNIKATU, numer_paczki) < 0) {
 		free(tekst);
-		return BLAD_CZYTANIA;
+		return 0;
 	}
 	ile_przeczytane = read(deskryptor, tekst + strlen(tekst), okno);
 	if (ile_przeczytane < 0) {
 		free(tekst);
-		return BLAD_CZYTANIA;
+		return 0;
 	}
 	if (ile_przeczytane == 0) {
 		free(tekst);
-		return EOF;
+		return 0;
 	}
 	if (wyslij_tekst(deskryptor, tekst)) {
 		free(tekst);
-		return 0;
+		return -5;
 	}
 	free(tekst);
-	return BLAD_CZYTANIA;
+	return -5;
 }
 
 int obsluz_data(const evutil_socket_t gniazdo,
@@ -154,13 +149,12 @@ int obsluz_data(const evutil_socket_t gniazdo,
 		ssize_t *const ostatnio_odebrany_ack,
 		ssize_t *const ostatnio_odebrany_nr)
 {
-	int32_t nr, ack, win;
-	int paczka_danych_wynik;
-	ssize_t wynik;
-	rodzaj_naglowka r;
+	int32_t nr, ack;
+	ssize_t paczka_danych_wynik, wynik;
+	size_t win;
 	char *napis = NULL;
 	char *dane;
-	if (sscanf(wiadomosc, "DATA %"SCNd32" %"SCNd32" %"SCNd32"\n",
+	if (sscanf(wiadomosc, "DATA %"SCNd32" %"SCNd32" %zu\n",
 		   &nr, &ack, &win) != 3) {
 		return 0;
 	}
@@ -177,7 +171,7 @@ int obsluz_data(const evutil_socket_t gniazdo,
 	}
 	paczka_danych_wynik = zrob_paczke_danych(win, ack, &napis);
 	if (paczka_danych_wynik > 0) {
-		wynik = write(gniazdo, napis, paczka_danych_wynik);
+		wynik = write(gniazdo, napis, (size_t) paczka_danych_wynik);
 		(*ostatnio_odebrany_ack) = ack;
 		free(napis);
 		napis = NULL;
@@ -190,21 +184,19 @@ int obsluz_data(const evutil_socket_t gniazdo,
 }
 
 int obsluz_ack(const evutil_socket_t gniazdo, const char *const naglowek,
-	       ssize_t *const ostatnio_odebrany_ack,
-	       ssize_t *const ostatnio_odebrany_nr)
+	       ssize_t *const ostatnio_odebrany_ack)
 {
-	int32_t nr, ack, win;
+	int32_t ack;
+	size_t win;
 	char *wiadomosc;
 	ssize_t rozmiar_wiadomosci;
-	if (wyskub_dane_z_naglowka(naglowek, &nr, &ack, &win) != 0)
+	if (sscanf(naglowek, "ACK %"SCNd32" %zu", &ack, &win) != 2)
 		return 0;
 	rozmiar_wiadomosci = zrob_paczke_danych(win, ack, &wiadomosc);
-	*ostatnio_odebrany_ack = ack;
-	if (rozmiar_wiadomosci == EOF)
+	*ostatnio_odebrany_ack = (ssize_t) ack;
+	if (rozmiar_wiadomosci < 0)
 		return 0;
-	if (rozmiar_wiadomosci == BLAD_CZYTANIA)
-		return 0;
-	if (write(gniazdo, wiadomosc, rozmiar_wiadomosci)
+	if (write(gniazdo, wiadomosc, (size_t) rozmiar_wiadomosci)
 	    != rozmiar_wiadomosci) {
 		free(wiadomosc);
 		return -1;
@@ -224,9 +216,11 @@ void ustaw_retransmit_limit(int argc, char *const *const argv)
 	if (tmp == NULL) {
 		RETRANSMIT_LIMIT = DOMYSLNIE;
 	} else {
-		if (jest_liczba_w_przedziale(MIN, MAX, tmp))
-			RETRANSMIT_LIMIT = atoi(tmp);
-		else
+		if (jest_liczba_w_przedziale(MIN, MAX, tmp)) {
+			if (sscanf(tmp, "%zu", &RETRANSMIT_LIMIT) != 1) {
+				syserr("źle");
+			}
+		} else
 			syserr("Źle podany parametr %s. "
 			       "Oczekiwano wartości między %s a %s.\n",
 			       OZNACZENIE, MIN, MAX);

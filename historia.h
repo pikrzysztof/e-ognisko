@@ -1,6 +1,8 @@
 #ifndef HISTORIA_H_HEDER
 #define HISTORIA_H_HEDER
 #include <stdlib.h>
+#include <stddef.h>
+
 typedef struct {
 	size_t dlugosc_wiadomosci;
 	void *wiadomosc;

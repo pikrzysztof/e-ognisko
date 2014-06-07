@@ -2,6 +2,7 @@
 #include "err.h"
 #include "wspolne.h"
 #include <string.h>
+#include <stdio.h>
 
 size_t rozmiar_historii;
 
@@ -12,13 +13,18 @@ static size_t podaj_rozmiar_historii(const int argc, char *const *const argv)
 	const char *const MIN = "0";
 	const char *const tmp = daj_opcje(OZNACZENIE, argc, argv);
 	const size_t DOMYSLNIE = 20;
+	size_t wynik;
 	if (tmp == NULL)
 		return DOMYSLNIE;
-	if (jest_liczba_w_przedziale(MIN, MAX, tmp))
-		return atoi(tmp);
-	else
+	if (jest_liczba_w_przedziale(MIN, MAX, tmp)) {
+		if (sscanf(tmp, "%zu", &wynik) != 1) {
+			syserr("Złe dane.");
+		}
+		return wynik;
+	} else
 		syserr("Opcja %s przyjmuje wartości od %s do %s.",
 		       OZNACZENIE, MIN, MAX);
+	return 0;
 }
 
 historia* historia_init(const int argc, char *const *const argv)
@@ -36,23 +42,22 @@ historia* historia_init(const int argc, char *const *const argv)
 	for (i = 0; i < rozmiar_historii; ++i) {
 		wynik->tablica_wpisow[i] = NULL;
 	}
-	wynik->glowa = -1;
+	wynik->glowa = SIZE_MAX;
 	return wynik;
 }
 
 wpis* podaj_wpis(const historia *const hist, const size_t numer_wpisu)
 {
-	long long int tmp, tmp2;
+	long long int tmp2;
 	if (hist == NULL ||
 	    hist->tablica_wpisow[hist->glowa] == NULL) {
 		debug("Ktoś zażądał wpisu z pustej historii albo spod NULLA.");
 		return NULL;
 	}
-	tmp = hist->glowa;
-	tmp2 = numer_wpisu - tmp;
+	tmp2 = (long long int) numer_wpisu - (long long int) hist->glowa;
 	while (tmp2 < 0)
-		tmp2 += rozmiar_historii;
-	tmp2 %= rozmiar_historii;
+		tmp2 += (long long int) rozmiar_historii;
+	tmp2 %= (long long int) rozmiar_historii;
 	if (hist->tablica_wpisow[tmp2] == NULL ||
 	    hist->tablica_wpisow[tmp2]->numer_pakietu != numer_wpisu) {
 		debug("Ktoś zażądał za starego wpisu.");

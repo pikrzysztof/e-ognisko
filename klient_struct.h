@@ -4,7 +4,8 @@
 #include "kolejka.h"
 #include <event2/event.h>
 #include <stdbool.h>
-typedef struct {
+
+struct jeszcze_dziwniejsze_imie {
 	FIFO *kolejka;
 	char *adres;
 	char *port;
@@ -17,7 +18,7 @@ typedef struct {
 	int32_t numer_kliencki;
 	clock_t czas;
 	bool potwierdzil_numer;
-} klient;
+};
 
 extern char *SITREP(klient *const o_kim);
 

@@ -1,5 +1,7 @@
 #include <assert.h>
+#include <limits.h>
 #include "wspolne.h"
+#include "err.h"
 #include <unistd.h>
 #include "klient_struct.h"
 #include "biblioteka_serwera.h"
@@ -85,6 +87,7 @@ int wstepne_ustalenia_z_klientem(const evutil_socket_t deskryptor_tcp,
 			     MAX_KLIENTOW);
 		return -1;
 	}
+	return 0;
 }
 
 size_t zlicz_aktywnych_klientow(klient **const klienci,
@@ -138,7 +141,7 @@ static int wyslij_wiadomosc(char *wiadomosc, size_t rozmiar, klient *kli,
 		return 0;
 	if (deskryptor == -1) {
 		if (send(kli->deskryptor_tcp, wiadomosc, rozmiar,
-			 MSG_NOSIGNAL | MSG_DONTWAIT) != rozmiar) {
+			 MSG_NOSIGNAL | MSG_DONTWAIT) != (ssize_t) rozmiar) {
 			return -1;
 		}
 	} else {
@@ -147,7 +150,7 @@ static int wyslij_wiadomosc(char *wiadomosc, size_t rozmiar, klient *kli,
 		if (sendto(deskryptor, wiadomosc, rozmiar,
 			   MSG_DONTWAIT | MSG_NOSIGNAL,
 			   (struct sockaddr *) &(kli->adres_udp),
-			   sizeof(struct sockaddr_in6)) != rozmiar) {
+			   sizeof(struct sockaddr_in6)) != (ssize_t) rozmiar) {
 			return -1;
 		}
 	}
@@ -158,8 +161,6 @@ void wyslij_wiadomosc_wszystkim(char *wiadomosc, klient **const klienci,
 			       const size_t MAX_KLIENTOW)
 {
 	size_t i;
-	evutil_socket_t desk;
-	int wynik = 0;
 	size_t rozmiar_wiadomosci = strlen(wiadomosc);
 	for (i = 0; i < MAX_KLIENTOW; ++i) {
 		if (klienci[i] == NULL)
@@ -212,12 +213,11 @@ void wywal(struct sockaddr_in6* adres, klient **klienci, size_t MAX_KLIENTOW)
 
 
 
-static void zaktualizuj_klienta(char *bufor, size_t ile_danych,
+static void zaktualizuj_klienta(char *bufor,
 				struct sockaddr_in6* adres, klient **klienci,
 				size_t MAX_KLIENTOW)
 {
-	int32_t nr, ack, win;
-	size_t i;
+	int32_t nr;
 	if (sscanf(bufor, "CLIENT %"SCNd32"\n", &nr) != 1) {
 		debug("Ktoś wysłał nie taki numer co trzeba.");
 		wywal(adres, klienci, MAX_KLIENTOW);
@@ -262,7 +262,7 @@ static int wyslij_paczke(klient *komu, evutil_socket_t gniazdo_udp,
 	char *tmp = zrob_naglowek(DATA, numer_paczki,
 				  komu->spodziewany_nr_paczki,
 				  daj_win(komu->kolejka), MTU);
-	wpis_historii = podaj_wpis(hist, numer_paczki);
+	wpis_historii = podaj_wpis(hist, (size_t) numer_paczki);
 	if (wpis_historii == NULL) {
 		free(tmp);
 		info("Nie udało się znaleźć w historii numeru %"SCNd32".",
@@ -275,7 +275,7 @@ static int wyslij_paczke(klient *komu, evutil_socket_t gniazdo_udp,
 	if (sendto(gniazdo_udp, tmp, ile_wyslac, MSG_DONTWAIT | MSG_NOSIGNAL,
 		   (struct sockaddr *) &(komu->adres_udp),
 		   sizeof(komu->adres_udp))
-	    != ile_wyslac) {
+	    != (ssize_t) ile_wyslac) {
 		free(tmp);
 		return -1;
 	}
@@ -283,21 +283,18 @@ static int wyslij_paczke(klient *komu, evutil_socket_t gniazdo_udp,
 	return 0;
 }
 
-static void retransmit(char *bufor, size_t ile_danych,
-		       struct sockaddr_in6 *adres,
+static void retransmit(struct sockaddr_in6 *adres,
 		       klient **klienci, size_t MAX_KLIENTOW,
 		       evutil_socket_t gniazdo_udp, historia *hist)
 {
 	size_t idx_klienta = podaj_indeks_klienta(adres, klienci, MAX_KLIENTOW);
-	char *tmp;
-	size_t i, ostatnia_wiadomosc;
-	int32_t nr;
+	size_t i, ostatnia_wiadomosc, nr;
 	if (hist->tablica_wpisow[hist->glowa] == NULL) {
 		info("Ktoś nas poprosił o retransmisje a "
 		     "my mamy pustą historię.");
 		return;
 	}
-	if (scanf("RETRANSMIT %"SCNd32"\n", &nr) != 1) {
+	if (scanf("RETRANSMIT %zu\n", &nr) != 1) {
 		info("Lewy nagłówek.");
 		return;
 	}
@@ -320,8 +317,7 @@ void ogarnij_wiadomosc_udp(char *bufor, size_t ile_danych,
 	bufor[ile_danych] = '\0';
 	switch (rozpoznaj_naglowek(bufor)) {
 	case CLIENT:
-		zaktualizuj_klienta(bufor, ile_danych, adres,
-					   klienci, MAX_KLIENTOW);
+		zaktualizuj_klienta(bufor, adres, klienci, MAX_KLIENTOW);
 		break;
 	case UPLOAD:
 		dodaj_klientowi_dane(bufor, ile_danych, adres,
@@ -329,8 +325,7 @@ void ogarnij_wiadomosc_udp(char *bufor, size_t ile_danych,
 		wyslij_acka(adres, gniazdo_udp, klienci, MAX_KLIENTOW);
 		break;
 	case RETRANSMIT:
-		retransmit(bufor, ile_danych, adres,
-			   klienci, MAX_KLIENTOW, gniazdo_udp, hist);
+		retransmit(adres, klienci, MAX_KLIENTOW, gniazdo_udp, hist);
 		break;
 	case KEEPALIVE:
 		keepalive(adres, klienci, MAX_KLIENTOW);
@@ -347,14 +342,18 @@ unsigned int daj_tx_interval(const int argc, char *const *const argv)
 	const char *const MIN = "1";
 	const char *const MAX = "8";
 	const char *tmp = daj_opcje(OZNACZENIE, argc, argv);
-	const int DOMYSLNIE = 5;
+	const unsigned int DOMYSLNIE = 5;
+	unsigned int wynik;
 	if (tmp == NULL)
 		return DOMYSLNIE;
-	if (jest_liczba_w_przedziale(MIN, MAX, tmp))
-		return atoi(tmp);
-	else
+	if (jest_liczba_w_przedziale(MIN, MAX, tmp)) {
+		if (sscanf(tmp, "%ui", &wynik) != 1)
+			syserr("Źle dane.");
+		return wynik;
+	} else
 		syserr("%s powinno mieć wartości pomiędzy %s a %s.",
 		       OZNACZENIE, MIN, MAX);
+	return UINT_MAX;
 }
 
 struct mixer_input* przygotuj_dane_mikserowi(klient **klienci,
@@ -385,30 +384,27 @@ void wyslij_wiadomosci(const void *const dane, const size_t ile_danych,
 		       const size_t MAX_KLIENTOW,
 		       int32_t numer_paczki)
 {
-	size_t i, rozmiar_paczki, tmp2;
+	size_t i;
+	ssize_t rozmiar_paczki;
+	ssize_t tmp2;
 	char *wiadomosc;
 	char *tmp;
 	for (i = 0; i < MAX_KLIENTOW; ++i) {
 		if (klienci[i] == NULL || !klienci[i]->potwierdzil_numer)
 			continue;
-		/* tmp = zrob_naglowek(DATA, numer_paczki, */
-		/* 		    klienci[i]->spodziewany_nr_paczki, */
-		/* 		    daj_win(klienci[i]->kolejka), */
-		/* 		    MTU); */
 		wiadomosc = malloc(MTU);
 		if (wiadomosc == NULL)
 			syserr("Zabrakło pamięci.");
-		/* write(STDOUT, dane, ile_danych); */
 		rozmiar_paczki = sprintf(wiadomosc,
-					 "DATA %"SCNd32" %"SCNd32" %"SCNd32"\n",
+					 "DATA %"SCNd32" %zu %"SCNd32"\n",
 					 numer_paczki,
 					 klienci[i]->spodziewany_nr_paczki,
 					 daj_win(klienci[i]->kolejka));
 		tmp = strchr(wiadomosc, '\n');
 		++tmp;
 		memcpy(tmp, dane, ile_danych);
-		rozmiar_paczki += ile_danych;
-		tmp2 = sendto(gniazdo_udp, wiadomosc, rozmiar_paczki,
+		rozmiar_paczki += (ssize_t) ile_danych;
+		tmp2 = sendto(gniazdo_udp, wiadomosc, (size_t) rozmiar_paczki,
 			      MSG_NOSIGNAL | MSG_DONTWAIT,
 			      (struct sockaddr *) &(klienci[i]->adres_udp),
 			      sizeof(klienci[i]->adres_udp));

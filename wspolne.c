@@ -19,7 +19,6 @@ static const bool DEBUG = true;
 static const bool DEBUG = false;
 #endif
 
-/* Takim oto sposobem będzie zawsze różne od EOF i 0. */
 const char *const OZNACZENIE_PARAMETRU_PORTU = "-p";
 const char *const DOMYSLNY_NUMER_PORTU = "12534";
 const size_t MTU = 2000;
@@ -168,10 +167,10 @@ bool wyslij_numer_kliencki(int deskryptor, int32_t numer_kliencki)
 	char *bufor = malloc(ROZMIAR_BUFORA * sizeof(char));
 	sprintf(bufor, "CLIENT %"SCNd32"\n", numer_kliencki);
 	debug(" KOMUNIKAT %s", bufor);
-	dlugosc_danych = strlen(bufor);
+	dlugosc_danych = (ssize_t) strlen(bufor);
 	assert(bufor[dlugosc_danych] == '\0');
 	debug("wysylam wiadomosc z nr klienckim %s", bufor);
-	if (write(deskryptor, bufor, dlugosc_danych * sizeof(char)) !=
+	if (write(deskryptor, bufor, (size_t) dlugosc_danych * sizeof(char)) !=
 	    dlugosc_danych) {
 		perror("Nie udało się wysłać numeru klienckiego.\n");
 		free(bufor);
@@ -187,13 +186,13 @@ int32_t odbierz_numer_kliencki(int deskryptor)
 	char *przyjmowane = malloc(MAX_ROZMIAR_WIADOMOSCI_POWITALNEJ);
 	const char *const MAX_NUMER_KLIENTA = "2147483647";
 	const char *const MIN_NUMER_KLIENTA = "0";
-	const size_t MIN_DLUGOSC_WIADOMOSCI = 9;
-	const size_t POCZATEK_NUMERU = 7;
+	const ssize_t MIN_DLUGOSC_WIADOMOSCI = 9;
+	const ssize_t POCZATEK_NUMERU = 7;
 	int32_t wynik;
 	ssize_t ile_przeczytane = read(deskryptor, przyjmowane,
 				       MAX_ROZMIAR_WIADOMOSCI_POWITALNEJ);
 	if (ile_przeczytane < MIN_DLUGOSC_WIADOMOSCI ||
-	    ile_przeczytane == MAX_ROZMIAR_WIADOMOSCI_POWITALNEJ) {
+	    (size_t) ile_przeczytane == MAX_ROZMIAR_WIADOMOSCI_POWITALNEJ) {
 		free(przyjmowane);
 		perror("Jakiś dziwny numer kliencki.");
 		return -1;
@@ -213,8 +212,8 @@ int32_t odbierz_numer_kliencki(int deskryptor)
 
 bool wyslij_tekst(int deskryptor, const char *const tekst)
 {
-	ssize_t ile_wyslac = strlen(tekst) * sizeof(char);
-	return (write(deskryptor, tekst, ile_wyslac) == ile_wyslac);
+	ssize_t ile_wyslac = (ssize_t) strlen(tekst) * (ssize_t) sizeof(char);
+	return (write(deskryptor, tekst, (size_t) ile_wyslac) == ile_wyslac);
 }
 
 ssize_t dopisz_na_koncu(char *const poczatek, const char *const fmt, ...)
@@ -237,62 +236,17 @@ void konkatenacja(char *const pierwszy, const char *const drugi,
 	(poczatek + dlugosc_drugiego)[pierwszy] = '\0';
 }
 
-ssize_t czytaj_do_konca_linii(const int deskryptor,
-			      char *const bufor, const ssize_t rozmiar_bufora)
-{
-	ssize_t ile_wczytano;
-	ssize_t i = -1;
-	do {
-		++i;
-		ile_wczytano = read(deskryptor, bufor + i, 1);
-
-	} while ((ile_wczytano == 1) && (i < rozmiar_bufora - 2)
-		 && (bufor[i] != '\n'));
-	if (ile_wczytano == -1)
-		return BLAD_CZYTANIA;
-	bufor[i + 1] = '\0';
-	if (ile_wczytano == 0)
-		return EOF;
-	return i + 1;
-}
-
-ssize_t czytaj_do_vectora(const int deskryptor, char **wynik)
-{
-	ssize_t ile_wczytano, i;
-	const size_t MNOZNIK = 2;
-	size_t dlugosc_bufora = 4;
-	*wynik = malloc(dlugosc_bufora);
-	i = -1;
-	do {
-		++i;
-		if (dlugosc_bufora <= i + 2) {
-			dlugosc_bufora *= MNOZNIK;
-			*wynik = realloc(*wynik, dlugosc_bufora);
-		}
-		ile_wczytano = read(deskryptor, (*wynik) + i, 1);
-	} while ((ile_wczytano == 1) && ((*wynik)[i] != '\n'));
-	if (ile_wczytano == -1) {
-		free(*wynik);
-		*wynik = NULL;
-		return BLAD_CZYTANIA;
-	}
-	if (ile_wczytano == 0)
-		return EOF;
-	(*wynik)[i + 1] = '\0';
-	return i + 1;
-}
-
-int max(const int a, const int b)
+size_t max(const size_t a, const size_t b)
 {
 	if (a > b)
 		return a;
 	return b;
 }
 
-int min(const int a, const int b)
+size_t min(const size_t a, const size_t b)
 {
 	if (a > b)
-		return b;
+		return (size_t) b;
 	return a;
 }
 
@@ -321,11 +275,7 @@ char* podaj_slowo(const char *const naglowek, size_t ktore)
 	const char *poczatek = naglowek;
 	const char *koniec;
 	char *wynik = NULL;
-	size_t ile_kopiowac, ile_alokowac;
-	if (ktore < 0) {
-		debug("ktos chyba na glowe upadl i chce ujemne slowo!");
-		return NULL;
-	}
+	ssize_t ile_kopiowac, ile_alokowac;
 	while (ktore --> 0) {
 		if (poczatek == NULL)
 			return NULL;
@@ -340,8 +290,9 @@ char* podaj_slowo(const char *const naglowek, size_t ktore)
 		koniec = strchr(poczatek, '\0');
 	ile_kopiowac = koniec - poczatek;
 	ile_alokowac = ile_kopiowac + 1;
-	wynik = malloc(ile_alokowac);
-	memcpy(wynik, poczatek, ile_kopiowac);
+	assert(ile_kopiowac >= 0 && ile_alokowac >= 0);
+	wynik = malloc((size_t) ile_alokowac);
+	memcpy(wynik, poczatek, (size_t) ile_kopiowac);
 	(ile_alokowac - 1)[wynik] = '\0';
 	return wynik;
 }
@@ -393,7 +344,7 @@ int wyskub_dane_z_naglowka(const char *const naglowek,
 	return 0;
 }
 
-static char *const zrob_ack(const int32_t ack, const int32_t win)
+static char* zrob_ack(const int32_t ack, const int32_t win)
 {
 	const size_t MAX_ROZMIAR_NAGLOWKA = 30;
 	const ssize_t MINIMALNA_DLUGOSC_NAGLOWKA = 8;
@@ -408,7 +359,7 @@ static char *const zrob_ack(const int32_t ack, const int32_t win)
 	return wynik;
 }
 
-static char *const zrob_upload(const int32_t nr, const size_t rozmiar_wyniku)
+static char* zrob_upload(const int32_t nr, const size_t rozmiar_wyniku)
 {
 	char *const wynik = malloc(rozmiar_wyniku);
 	const ssize_t MINIMALNA_DLUGOSC_NAGLOWKA = 9;
@@ -422,7 +373,7 @@ static char *const zrob_upload(const int32_t nr, const size_t rozmiar_wyniku)
 	return wynik;
 }
 
-static char *const zrob_data(const int32_t nr, const int32_t ack,
+static char* zrob_data(const int32_t nr, const int32_t ack,
 			     const int32_t win, const size_t rozmiar_wyniku)
 {
 	char *const wynik = malloc(rozmiar_wyniku);
@@ -437,7 +388,7 @@ static char *const zrob_data(const int32_t nr, const int32_t ack,
 	return wynik;
 }
 
-static char *const zrob_keepalive()
+static char* zrob_keepalive()
 {
 	char *const wynik = malloc(40);
 	const ssize_t MINIMALNA_DLUGOSC_NAGLOWKA = 10;
@@ -450,7 +401,7 @@ static char *const zrob_keepalive()
 	return NULL;
 }
 
-static char *const zrob_retransmit(const int32_t nr)
+static char* zrob_retransmit(const int32_t nr)
 {
 	char *const wynik = malloc(40);
 	const ssize_t MINIMALNA_DLUGOSC_NAGLOWKA = 10;
@@ -464,7 +415,7 @@ static char *const zrob_retransmit(const int32_t nr)
 	return wynik;
 }
 
-static char *const zrob_client(const int32_t clientid)
+static char* zrob_client(const int32_t clientid)
 {
 	char *const wynik = malloc(40);
 	const ssize_t MINIMALNA_DLUGOSC_NAGLOWKA = 8;
@@ -478,9 +429,9 @@ static char *const zrob_client(const int32_t clientid)
 	return wynik;
 }
 
-char *const zrob_naglowek(const rodzaj_naglowka r,
-			  const int32_t nr, const int32_t ack,
-			  const int32_t win, const size_t rozmiar_wyniku)
+char* zrob_naglowek(const rodzaj_naglowka r,
+		    const int32_t nr, const int32_t ack,
+		    const int32_t win, const size_t rozmiar_wyniku)
 {
 	switch (r) {
 	case CLIENT:

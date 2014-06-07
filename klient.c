@@ -4,15 +4,21 @@
 /* numer albumu 332534 */
 /* W projekcie zostały wykorzystane fragmenty kodu z zajęć. */
 /* kodowanie UTF-8 */
-#include <unistd.h>
+#include <assert.h>
+#include <event2/event.h>
+#include <netdb.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
+
 #include "err.h"
 #include "wspolne.h"
 #include "biblioteka_klienta.h"
-#include <event2/event.h>
-#include <stdarg.h>
-#include <assert.h>
+
 
 #ifndef NDEBUG
 static const bool DEBUG = true;
@@ -39,7 +45,7 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 {
 	const size_t MAX_ROZMIAR = 20000;
 	char *const tmp = malloc(MAX_ROZMIAR);
-	size_t ile_przyszlo;
+	ssize_t ile_przyszlo;
 	if (tmp == NULL)
 		syserr("Mało pamięci.");
 	if (flagi & EV_TIMEOUT || !(flagi & EV_READ)) {
@@ -54,7 +60,8 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi,
 		skoncz_petle((struct event_base *) baza_zdarzen,
 			     "Serwer daje dziwne rzeczy.");
 	} else {
-		if (write(STDERR_FILENO, tmp, ile_przyszlo) != ile_przyszlo) {
+		if (write(STDERR_FILENO, tmp, (size_t) ile_przyszlo)
+		    != ile_przyszlo) {
 			syserr("Nie da się pisać na stdout.");
 		}
 		free(tmp);
@@ -85,7 +92,7 @@ void czytaj_i_reaguj_udp(evutil_socket_t gniazdo_udp, short flagi,
 	naglowek[ile_wczytane] = '\0';
 	switch (rozpoznaj_naglowek(naglowek)) {
 	case DATA:
-		if (obsluz_data(gniazdo_udp, naglowek, ile_wczytane,
+		if (obsluz_data(gniazdo_udp, naglowek, (size_t) ile_wczytane,
 				&potrzebne.ostatnio_odebrany_ack,
 				&potrzebne.ostatnio_odebrany_nr) != 0)
 			skoncz_petle(potrzebne.baza_zdarzen, "Źle z DATA.");
@@ -93,8 +100,7 @@ void czytaj_i_reaguj_udp(evutil_socket_t gniazdo_udp, short flagi,
 		break;
 	case ACK:
 		if (obsluz_ack(gniazdo_udp, naglowek,
-			       &potrzebne.ostatnio_odebrany_ack,
-			       &potrzebne.ostatnio_odebrany_nr) != 0)
+			       &potrzebne.ostatnio_odebrany_ack) != 0)
 			skoncz_petle(potrzebne.baza_zdarzen, "Źle z ACK.");
 		free(naglowek);
 		break;
@@ -110,7 +116,8 @@ void wyslij_keepalive(evutil_socket_t minus_jeden, short flagi,
 		      void *deskryptor)
 {
 	const int arg = *((int *) deskryptor);
-	/* debug("KEEPALIVE"); */
+	unused(minus_jeden);
+	unused(flagi);
 	if (!wyslij_tekst(arg, "KEEPALIVE\n")) {
 		perror("Nie udalo sie wyspac KEEPALIVE.");
 	}
@@ -124,8 +131,7 @@ evutil_socket_t ustanow_polaczenie(const int protokol,
                                             SOCK_STREAM : SOCK_DGRAM;
 	const evutil_socket_t gniazdo = zrob_gniazdo(typ_gniazda,
 						     adres_serwera);
-	struct addrinfo* adres_binarny_serwera = NULL;
-	int set = 1;
+	struct addrinfo* adres_binarny_serwera;
 	if (gniazdo == -1)
 		return gniazdo;
 	adres_binarny_serwera = podaj_adres_binarny(adres_serwera,
@@ -161,8 +167,7 @@ void dzialaj(const char* const adres_serwera, const char* const port)
 	udp_arg dla_funkcji_udp;
 	struct timeval dziesiec_setnych = {0, 100000};
 	debug("ustawiamy gniazda na nieblokujace");
-	if (!ustaw_gniazdo_nieblokujace(STDIN_FILENO) /* || */
-	    /* !ustaw_gniazdo_nieblokujace(STDOUT_FILENO) */) {
+	if (!ustaw_gniazdo_nieblokujace(STDIN_FILENO)) {
 		perror("Nie mozna ustawic STDIN/STDOUT na"
 		       " nieblokujace.");
 		return;
@@ -265,7 +270,7 @@ int main(int argc, char **argv)
 	const char *const OZNACZENIE_PARAMETRU_ADRESU = "-s";
 	const char *adres_serwera = NULL;
 	const char *port = NULL;
-	const useconds_t ILE_SPAC = 500000;
+	const struct timespec ILE_SPAC = {0, 500000000};
 	if (argc < 3)
 		zle_uzywane(argv[0]);
 	adres_serwera = daj_opcje(OZNACZENIE_PARAMETRU_ADRESU, argc,
@@ -277,7 +282,7 @@ int main(int argc, char **argv)
 		port = DOMYSLNY_NUMER_PORTU;
 	while (true) {
 		dzialaj(adres_serwera, port);
-		usleep(ILE_SPAC);
+		nanosleep(&ILE_SPAC, NULL);
 	}
 	return EXIT_SUCCESS;
 }

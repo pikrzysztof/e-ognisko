@@ -49,4 +49,9 @@ extern struct mixer_input* przygotuj_dane_mikserowi(klient **klienci,
 				    const size_t MAX_LICZBA_KLIENTOW);
 
 extern void odsmiecarka(klient **klienci, const size_t MAX_KLIENTOW);
+
+extern void wyslij_wiadomosci(const void *const dane, const size_t ile_danych,
+			      const evutil_socket_t gniazdo_udp,
+			      klient **const klienci, size_t MAX_KLIENTOW,
+			      int32_t numer_paczki);
 #endif

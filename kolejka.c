@@ -47,7 +47,8 @@ void init_wodnego_Marka(const int argc, char *const *const argv)
 			fatal("Zle podany parametr %s.", LOW_OZNACZENIE);
 		if (!jest_liczba_w_przedziale(MIN_ROZMIAR, MAX_ROZMIAR, tmp))
 			fatal("Zle podany parametr %s.", LOW_OZNACZENIE);
-		FIFO_LOW_WATERMARK = atoi(tmp);
+		if (sscanf(tmp, "%zu", &FIFO_LOW_WATERMARK) != 1)
+			syserr("źle");
 	} else {
 		FIFO_LOW_WATERMARK = DOMYSLNY_NISKI_MAREK;
 	}
@@ -57,7 +58,8 @@ void init_wodnego_Marka(const int argc, char *const *const argv)
 			fatal("Zle podany parametr %s.", HIGH_OZNACZENIE);
 		if (!jest_liczba_w_przedziale(MIN_ROZMIAR, MAX_ROZMIAR, tmp))
 			fatal("Zle podany parametr %s.", HIGH_OZNACZENIE);
-		FIFO_HIGH_WATERMARK = atoi(tmp);
+		if (sscanf(tmp, "%zu", &FIFO_LOW_WATERMARK) != 1)
+			syserr("Źle");
 	} else {
 		FIFO_HIGH_WATERMARK = FIFO_SIZE;
 	}
@@ -80,7 +82,8 @@ void ustaw_rozmiar_fifo(int argc, char *const *const argv)
 			fatal("Parametr %s zle podany.", OZNACZENIE);
 		if (!jest_liczba_w_przedziale(MIN_ROZMIAR, MAX_ROZMIAR, tmp))
 			fatal("Parametr %s zle podany.", OZNACZENIE);
-		FIFO_SIZE = atoi(tmp);
+		if (sscanf(tmp, "%zu", &FIFO_SIZE) != 1)
+			syserr("Źle");
 	}
 }
 
@@ -124,7 +127,7 @@ int dodaj(FIFO *const fifo, void *dane, size_t rozmiar_danych)
 	char *tmp = dane;
 	tmp = strchr(dane, '\n');
 	++tmp;
-	rozmiar_danych -= tmp - (char *)dane;
+	rozmiar_danych -= (size_t) (tmp - (char *)dane);
 	if (daj_FIFO_SIZE() - (fifo->liczba_zuzytych_bajtow) < rozmiar_danych) {
 		debug("za dużo danych");
 		return -1;
@@ -141,11 +144,11 @@ int32_t daj_win(FIFO *fifo)
 	return FIFO_SIZE - fifo->liczba_zuzytych_bajtow;
 }
 
-static usun_poczatek(FIFO *const fifo, const size_t ile)
+static void usun_poczatek(FIFO *const fifo, const size_t ile)
 {
 	assert(fifo->liczba_zuzytych_bajtow >= ile);
 	fifo->liczba_zuzytych_bajtow -= ile;
-	memmove(fifo->kolejka, fifo->kolejka + ile,
+	memmove(fifo->kolejka, ((char *) fifo->kolejka) + ile,
 		fifo->liczba_zuzytych_bajtow);
 	ustaw_wodnego_Marka(fifo);
 }

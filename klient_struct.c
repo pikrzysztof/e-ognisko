@@ -7,31 +7,15 @@
 #include <netinet/ip.h>
 #include <sys/types.h>
 #include "klient_struct.h"
+#include "biblioteka_serwera.h"
 #include "kolejka.h"
-char *SITREP(klient *const);
-void usun(klient*);
-int dodaj_klienta(const evutil_socket_t, const in32_t,
-		  klient **const, const size_t);
-void usun_klienta(const evutil_socket_t, klient **const, const size_t);
+#include "wspolne.h"
 /* Podaje indeks klienta badz dlugosc_tablicy jak klienta nie ma. */
 static size_t daj_klienta(const evutil_socket_t, klient **const, const size_t);
-/* wola free na argumentach. */
-static void zwolnij(unsigned int, ...);
-/* Ustawia klientowi adresy na podstawie deskryptora TCP. */
-static int poustawiaj_adresy(klient *);
 /* Robi klienta na podstaiwe deskrptora i daje wskaznik do niego lub NULL. */
 static klient *zrob_klienta(evutil_socket_t);
 /* Podaje pierwszego NULLa w tablicy. */
 static size_t podaj_pierwszego_nulla(klient **const, const size_t);
-static void zwolnij(unsigned int ile_do_zwolnienia, ...)
-{
-	va_list do_zwolnienia;
-	unsigned int i;
-	va_start(do_zwolnienia, ile_do_zwolnienia);
-	for (i = 0; i < ile_do_zwolnienia; ++i)
-		free(va_arg(do_zwolnienia, void *));
-	va_end(do_zwolnienia);
-}
 
 static int porownaj_ipv6(struct sockaddr_in6 *pierwszy,
 			 struct sockaddr_in6 *drugi)
@@ -60,8 +44,6 @@ int rowne(struct sockaddr_in6 *pierwszy, struct sockaddr_in6 *drugi)
 static klient *zrob_klienta(const evutil_socket_t deskryptor)
 {
 	klient *k = malloc(sizeof(klient));
-	size_t tmp;
-	const size_t MAX_ROZMIAR_PORTU = 10;
 	if (k == NULL)
 		return NULL;
 	k->adres = NULL;
@@ -179,11 +161,11 @@ void usun_klienta(const evutil_socket_t deskryptor_tcp,
 			 klient **const klienci,
 			 const size_t dlugosc_tablicy)
 {
-	size_t klient = daj_klienta(deskryptor_tcp, klienci, dlugosc_tablicy);
-	if (klient >= dlugosc_tablicy)
+	size_t idx_kli = daj_klienta(deskryptor_tcp, klienci, dlugosc_tablicy);
+	if (idx_kli >= dlugosc_tablicy)
 		return;
-	usun(klienci[klient]);
-	klienci[klient] = NULL;
+	usun(klienci[idx_kli]);
+	klienci[idx_kli] = NULL;
 }
 
 static size_t zlokalizuj_po_nr_klienckim(const int32_t numer_kliencki,
@@ -205,7 +187,6 @@ void dodaj_adresy(const int32_t numer_kliencki, struct sockaddr_in6 *adres,
 {
 	size_t idx_klienta;
 	const size_t MAX_ROZMIAR_PORTU = 20;
-	const size_t MAX_ROZMIAR_ADRESU = 50;
 	idx_klienta = zlokalizuj_po_nr_klienckim(numer_kliencki,
 						 klienci, MAX_KLIENTOW);
 	if (klienci[idx_klienta]->potwierdzil_numer) {
@@ -257,16 +238,14 @@ void dodaj_klientowi_dane(void *bufor, size_t ile_danych,
 			  const size_t MAX_KLIENTOW)
 {
 	size_t idx = podaj_indeks_klienta(adres, klienci, MAX_KLIENTOW);
-	int32_t nr, ack, win;
-	long long int nrLL;
+	size_t nr;
 	if (idx >= MAX_KLIENTOW)
 		return;
-	if (sscanf(bufor, "UPLOAD %"SCNd32"\n", &nr) != 1)
-		nr = -30;
-	nrLL = nr;
-	if (klienci[idx]->spodziewany_nr_paczki != nrLL) {
+	if (sscanf(bufor, "UPLOAD %zu\n", &nr) != 1)
+		nr = SIZE_MAX;
+	if (klienci[idx]->spodziewany_nr_paczki != nr) {
 		info("Spodziewany numer paczki się nie zgadza, dostaliśmy %i"
-		     " a powinno być %i", nrLL,
+		     " a powinno być %zu", nr,
 		     klienci[idx]->spodziewany_nr_paczki);
 		usun(klienci[idx]);
 		klienci[idx] = NULL;
@@ -287,8 +266,10 @@ void dodaj_klientowi_dane(void *bufor, size_t ile_danych,
 
 void uaktualnij_wartosci_sitrepu(klient *const k)
 {
-	k->min_rozmiar_ostatnio = min(k->min_rozmiar_ostatnio,
-				      k->kolejka->liczba_zuzytych_bajtow);
-	k->max_rozmiar_ostatnio = max(k->max_rozmiar_ostatnio,
-				      k->kolejka->liczba_zuzytych_bajtow);
+	long long unsigned int a, b;
+	a = k->min_rozmiar_ostatnio;
+	b = k->kolejka->liczba_zuzytych_bajtow;
+	k->min_rozmiar_ostatnio = min(a, b);
+	a = k->max_rozmiar_ostatnio;
+	k->max_rozmiar_ostatnio = max(a, b);
 }
