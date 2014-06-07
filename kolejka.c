@@ -102,6 +102,8 @@ FIFO* init_FIFO()
 	}
 	wynik->liczba_zuzytych_bajtow = 0;
 	wynik->stan = FILLING;
+	memset(wynik->kolejka, 0, FIFO_SIZE);
+	return wynik;
 }
 
 void ustaw_wodnego_Marka(FIFO *const fifo)
@@ -128,7 +130,7 @@ int dodaj(FIFO *const fifo, void *dane, size_t rozmiar_danych)
 		return -1;
 	}
 	memcpy(((char *) (fifo->kolejka)) + fifo->liczba_zuzytych_bajtow,
-	       dane, rozmiar_danych);
+	       tmp, rozmiar_danych);
 	fifo->liczba_zuzytych_bajtow += rozmiar_danych;
 	ustaw_wodnego_Marka(fifo);
 	return 0;

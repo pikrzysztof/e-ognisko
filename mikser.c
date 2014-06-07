@@ -14,7 +14,7 @@ static int16_t wez_wartosc(struct mixer_input *const input,
 		debug("tam");
 	if (input->len/2 <= ktora_liczba)
 		return 0;
-	++(input->consumed);
+	input->consumed += sizeof(int16_t);
 	return ktora_liczba[tablica];
 }
 
@@ -33,7 +33,7 @@ void mixer(struct mixer_input *inputs, size_t n, void *output_buf,
 	   size_t *output_size, unsigned long tx_interval_ms)
 {
 	size_t i;
-	size_t obliczony_rozmiar_wyjscia = 176 * tx_interval_ms /
+	size_t obliczony_rozmiar_wyjscia = 176 * tx_interval_ms/
 		sizeof(int16_t);
 	*output_size /= sizeof(int16_t);
 	if (obliczony_rozmiar_wyjscia != *output_size) {

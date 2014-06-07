@@ -37,8 +37,8 @@
 # zywcem.
 
 CC           := gcc
-CDEBUGFLAGS  := -ggdb3 -D _DEBUG -O0
-LDDEBUGFLAGS := -ggdb3 -D _DEBUG -O0
+CDEBUGFLAGS  := -ggdb3 -D _DEBUG -O2
+LDDEBUGFLAGS := -ggdb3 -D _DEBUG -O2
 CRELEASEFLAGS:= -D NDEBUG -O2
 LDRELEASEFLAGS:= -D NDEBUG -O2
 SOURCES      := $(wildcard *.c)

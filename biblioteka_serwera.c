@@ -194,11 +194,6 @@ static void keepalive(struct sockaddr_in6 *adres,
 		return;
 	}
 	klienci[kto]->czas = clock();
-	if (klienci[kto]->potwierdzil_numer)
-		info("potwierdzil");
-	else
-		info("nie potwierdzil");
-	info("%i wysłał keepalive.", klienci[kto]->numer_kliencki);
 	if (!(klienci[kto]->potwierdzil_numer)) {
 		usun(klienci[kto]);
 		klienci[kto] = NULL;

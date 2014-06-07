@@ -21,8 +21,6 @@ static ssize_t zrob_paczke_danych(const size_t okno,
 	int errtmp;
 	const size_t MIN_ROZMIAR = 30;
 	(*napis) = malloc(MTU);
-	debug("okno %i paczka nr %i, ostatnio wyslany %i", okno, nr_paczki,
-	      ostatnio_wyslany_nr);
 	if (*napis == NULL)
 		syserr("Mało pamięci.");
 	if (nr_paczki == 0) {
@@ -48,7 +46,6 @@ static ssize_t zrob_paczke_danych(const size_t okno,
 						min(okno, MAX_ROZMIAR_DANYCH));
 	if (ostatnio_wyslany_pakiet == NULL)
 		syserr("Pamięci brakuje.");
-	debug("ZROBILI NAM NAGLOWEK %s", ostatnio_wyslany_pakiet);
 	poczatek_danych = strchr(ostatnio_wyslany_pakiet, '\n');
 	++poczatek_danych;
 	ostatni_wynik = strlen(ostatnio_wyslany_pakiet);
@@ -64,9 +61,7 @@ static ssize_t zrob_paczke_danych(const size_t okno,
 		return 0;
 	}
 	ostatnio_wyslany_nr = nr_paczki;
-	debug("laczna dlugosc pakietu %i", ostatni_wynik);
 	memcpy((*napis), ostatnio_wyslany_pakiet, ostatni_wynik);
-	debug("koniec");
 	return ostatni_wynik;
 }
 
@@ -170,7 +165,10 @@ int obsluz_data(const evutil_socket_t gniazdo,
 		   &nr, &ack, &win) != 3) {
 		return 0;
 	}
-	if ((*ostatnio_odebrany_nr) + 1 >= nr - RETRANSMIT) {
+	if ((*ostatnio_odebrany_nr) + 1 >= nr - RETRANSMIT
+	    && *ostatnio_odebrany_nr != -1) {
+		info("ostatnio odebrany numer to %i, a dostaliśmy %i, retransmit to %i",
+		     *ostatnio_odebrany_nr, nr, nr - RETRANSMIT);
 		dane = zrob_naglowek(RETRANSMIT,
 				     (*ostatnio_odebrany_nr) + 1, -1, -1, 0);
 		write(gniazdo, dane, strlen(dane));
@@ -179,11 +177,9 @@ int obsluz_data(const evutil_socket_t gniazdo,
 		wypisz(wiadomosc, ile_danych);
 	}
 	paczka_danych_wynik = zrob_paczke_danych(win, ack, &napis);
-	debug("wynik: %i, gniazdo %i", paczka_danych_wynik, gniazdo);
 	if (paczka_danych_wynik > 0) {
 		wynik = write(gniazdo, napis, paczka_danych_wynik);
 		(*ostatnio_odebrany_ack) = ack;
-		debug("wysłaliśmy");
 		free(napis);
 		napis = NULL;
 		if (wynik < 0)
