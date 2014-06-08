@@ -155,7 +155,7 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi, void *nic)
 	socklen_t dlugosc = sizeof(addr);
 	unused(nic);
 	unused(flagi);
-	info("CZytaj i reaguj TCP");
+	info("Ktoś się chce połaczyć po TCP.");
 	deskryptor = accept(gniazdo_tcp, &addr, &dlugosc);
 	if (deskryptor == -1) {
 		info("Błąd w przyjmowaniu połączenia.");
@@ -164,7 +164,6 @@ void czytaj_i_reaguj_tcp(evutil_socket_t gniazdo_tcp, short flagi, void *nic)
 					 klienci, MAX_KLIENTOW) == 0) {
 	}
 	++numer_kliencki;
-	info("czytaj i reaguj tcp spr klientow");
 	sprawdz_klientow();
 }
 
@@ -179,9 +178,7 @@ void wyslij_raporty(evutil_socket_t nic, short flagi, void* zero)
 		return;
 	}
 	wyslij_wiadomosc_wszystkim(raport, klienci, MAX_KLIENTOW);
-	info("Wysłałem raport %s", raport);
 	free(raport);
-	info("wyslij raporty spr klientow");
 	sprawdz_klientow();
 }
 
