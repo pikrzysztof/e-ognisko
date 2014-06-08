@@ -66,7 +66,7 @@ ALLOBJECTS  := $(subst .c,.o,$(SOURCES))
 OBJECTS	    := $(filter-out $(MAINOBJECTS),$(ALLOBJECTS))
 # pliki obiektowe, ktore nie zawieraja definicji main
 
-all: $(DEPENDS) $(ALL) Makefile tags
+all: $(DEPENDS) $(ALL)
 
 $(DEPENDS) : %.d : %.c				# tworzenie submakefiles
 	$(CC) -MM $< > $@			# 	- zaleznosc
@@ -84,9 +84,6 @@ remake: clean all
 
 debug: $(OBJECTS)
 	make debuglevel=1
-
-tags: $(SOURCES)
-	etags *.[ch]
 
 tests:
 	rm -f test

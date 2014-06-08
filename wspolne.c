@@ -1,3 +1,11 @@
+/* Trzeci program zaliczeniowy z sieci komputerowych. */
+/* Napisany przez Krzysztofa Piecucha, */
+/* studenta informatyki k MISMaP UW */
+/* numer albumu 332534 */
+/* W projekcie zostały wykorzystane fragmenty kodu z zajęć. */
+/* kodowanie UTF-8 */
+
+
 #include "wspolne.h"
 #include <unistd.h>
 #include <string.h>
