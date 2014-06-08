@@ -32,6 +32,7 @@ void odsmiecarka(klient **klienci, const size_t MAX_KLIENTOW)
 	for (i = 0; i < MAX_KLIENTOW; ++i)
 		if (klienci[i] != NULL && klienci[i]->potwierdzil_numer
 		    && ((clock() - klienci[i]->czas) / CLOCKS_PER_SEC) >= 1) {
+			debug("usuwam bo odśmiecarka.");
 			usun(klienci[i]);
 			klienci[i] = NULL;
 		}
@@ -82,7 +83,7 @@ int wstepne_ustalenia_z_klientem(const evutil_socket_t deskryptor_tcp,
 	}
 	if (!wyslij_numer_kliencki(deskryptor_tcp, numer_kliencki)) {
 		info("Nie udało się wysłać "
-		     "numeru klienckiego.");
+		     "numeru klienckiego to usuwam.");
 		usun_klienta(deskryptor_tcp, klienci,
 			     MAX_KLIENTOW);
 		return -1;
@@ -167,6 +168,7 @@ void wyslij_wiadomosc_wszystkim(char *wiadomosc, klient **const klienci,
 			continue;
 		if (wyslij_wiadomosc(wiadomosc, rozmiar_wiadomosci,
 				     klienci[i], -1) == -1) {
+			debug("usuwam bo nie dalo sie wyslac danych.");
 			usun(klienci[i]);
 			klienci[i] = NULL;
 		}
@@ -196,6 +198,7 @@ static void keepalive(struct sockaddr_in6 *adres,
 	}
 	klienci[kto]->czas = clock();
 	if (!(klienci[kto]->potwierdzil_numer)) {
+		debug("usuwam bo wyslal keepalive a nie potwierdzil numeru.");
 		usun(klienci[kto]);
 		klienci[kto] = NULL;
 	}
@@ -248,6 +251,7 @@ static void wyslij_acka(struct sockaddr_in6* adres, evutil_socket_t gniazdo_udp,
 	if (sendto(gniazdo_udp, odpowiedz, strlen(odpowiedz),
 		   MSG_NOSIGNAL | MSG_DONTWAIT, (struct sockaddr *) adres,
 		   sizeof(*adres)) <= 0) {
+		debug("usuwam bo sendto ack nie dało rady.");
 		usun(klienci[idx_klienta]);
 		klienci[idx_klienta] = NULL;
 	}
@@ -302,6 +306,7 @@ static void retransmit(struct sockaddr_in6 *adres,
 	for (i = nr; i <= ostatnia_wiadomosc; ++i) {
 		if (wyslij_paczke(klienci[idx_klienta], gniazdo_udp, i, hist)
 		    == -1) {
+			debug("usuwam bo nie udalo mi sie retransmitnac.");
 			usun(klienci[idx_klienta]);
 			klienci[idx_klienta] = NULL;
 			return;

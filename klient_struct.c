@@ -138,6 +138,7 @@ int dodaj_klienta(const evutil_socket_t deskryptor,
 	klienci[miejsce]->numer_kliencki = numer_kliencki;
 	if (evutil_make_socket_nonblocking(klienci[miejsce]->deskryptor_tcp)
 	    != 0) {
+		debug("usuwam bo nie da sie zrobic socketa nieblokujacego");
 		usun(klienci[miejsce]);
 		klienci[miejsce] = NULL;
 		return -1;
@@ -190,6 +191,8 @@ void dodaj_adresy(const int32_t numer_kliencki, struct sockaddr_in6 *adres,
 	idx_klienta = zlokalizuj_po_nr_klienckim(numer_kliencki,
 						 klienci, MAX_KLIENTOW);
 	if (klienci[idx_klienta]->potwierdzil_numer) {
+		debug("usuwam bo potwierdził numer i jeszcze raz wysłał "
+		      "client");
 		usun(klienci[idx_klienta]);
 		klienci[idx_klienta] = NULL;
 	}

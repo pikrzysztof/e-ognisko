@@ -251,24 +251,33 @@ size_t min(const size_t a, const size_t b)
 	return a;
 }
 
+/* sscanf działa za wolno. */
+static bool rowne(size_t dlugosc, const char *const wzorzec,
+		  const char *const arg)
+{
+	size_t i;
+	for (i = 0; i < dlugosc; ++i) {
+		if (wzorzec[i] != arg[i])
+			return false;
+	}
+	return true;
+}
+
 rodzaj_naglowka rozpoznaj_naglowek(const char *const naglowek)
 {
-	switch (naglowek[0]) {
-	case 'C':
+	if (rowne(6, "CLIENT", naglowek))
 		return CLIENT;
-	case 'U':
+	if (rowne(6, "UPLOAD", naglowek))
 		return UPLOAD;
-	case 'A':
+	if (rowne(3, "ACK", naglowek))
 		return ACK;
-	case 'D':
-		return DATA;
-	case 'R':
+	if (rowne(10, "RETRANSMIT", naglowek))
 		return RETRANSMIT;
-	case 'K':
+	if (rowne(9, "KEEPALIVE", naglowek))
 		return KEEPALIVE;
-	default:
-		return INNY;
-	}
+	if (rowne(4, "DATA", naglowek))
+		return DATA;
+	return INNY;
 }
 
 char* podaj_slowo(const char *const naglowek, size_t ktore)
