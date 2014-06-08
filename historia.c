@@ -95,7 +95,6 @@ void dodaj_wpis(historia *const hist, const size_t numer_wpisu,
 	}
 	usun_wpis(hist->tablica_wpisow[hist->glowa]);
 	free(hist->tablica_wpisow[hist->glowa]);
-	hist->tablica_wpisow[hist->glowa] = nowy_wpis(rozmiar_danych,
-						      dane,
+	hist->tablica_wpisow[hist->glowa] = nowy_wpis(rozmiar_danych, dane,
 						      numer_wpisu);
 }

@@ -58,13 +58,15 @@ void init_wodnego_Marka(const int argc, char *const *const argv)
 			fatal("Zle podany parametr %s.", HIGH_OZNACZENIE);
 		if (!jest_liczba_w_przedziale(MIN_ROZMIAR, MAX_ROZMIAR, tmp))
 			fatal("Zle podany parametr %s.", HIGH_OZNACZENIE);
-		if (sscanf(tmp, "%zu", &FIFO_LOW_WATERMARK) != 1)
+		if (sscanf(tmp, "%zu", &FIFO_HIGH_WATERMARK) != 1)
 			syserr("Źle");
 	} else {
 		FIFO_HIGH_WATERMARK = FIFO_SIZE;
 	}
 	if (FIFO_HIGH_WATERMARK <= FIFO_LOW_WATERMARK)
-		fatal("Zle podane watermarki.");
+		fatal("Zle podane watermarki, FIFO_SIZE jest %i,"
+		      "H = %i, L = %i", FIFO_SIZE, FIFO_HIGH_WATERMARK,
+		      FIFO_LOW_WATERMARK);
 	if (FIFO_HIGH_WATERMARK > FIFO_SIZE)
 		fatal("Zle podane watermarki.");
 }
