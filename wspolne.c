@@ -170,6 +170,7 @@ bool wyslij_numer_kliencki(int deskryptor, int32_t numer_kliencki)
 	dlugosc_danych = (ssize_t) strlen(bufor);
 	assert(bufor[dlugosc_danych] == '\0');
 	debug("wysylam wiadomosc z nr klienckim %s", bufor);
+	assert(dlugosc_danych > 0);
 	if (write(deskryptor, bufor, (size_t) dlugosc_danych * sizeof(char)) !=
 	    dlugosc_danych) {
 		perror("Nie udało się wysłać numeru klienckiego.\n");

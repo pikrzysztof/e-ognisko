@@ -138,7 +138,7 @@ void udp_czytanie(evutil_socket_t gniazdo_udp, short flagi, void *nic)
 				      &dlugosc_adresu);
 	unused(flagi);
 	unused(nic);
-	if (ile_danych <= 0) {
+	if (ile_danych < 0) {
 		syserr("Recv po udp się nie powiodło");
 	}
 	ogarnij_wiadomosc_udp(bufor, (size_t) ile_danych,

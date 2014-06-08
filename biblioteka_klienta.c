@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <errno.h>
 #include "biblioteka_klienta.h"
 #include "wspolne.h"
@@ -110,6 +111,7 @@ static void wypisz(const char *const dane_z_naglowkiem, size_t rozmiar)
 		return;
 	++tmp;
 	ile_binarnych = rozmiar - (size_t) (tmp - dane_z_naglowkiem);
+	assert(ile_binarnych > 0);
 	if (write(STDOUT_FILENO, tmp, ile_binarnych) != (ssize_t) ile_binarnych)
 		syserr("Write się nie udał.");
 }
@@ -164,6 +166,7 @@ int obsluz_data(const evutil_socket_t gniazdo,
 		     *ostatnio_odebrany_nr, nr, nr - RETRANSMIT);
 		dane = zrob_naglowek(RETRANSMIT,
 				     (*ostatnio_odebrany_nr) + 1, -1, -1, 0);
+		assert(strlen(dane) > 0);
 		write(gniazdo, dane, strlen(dane));
 		free(dane);
 	} else {
@@ -194,7 +197,7 @@ int obsluz_ack(const evutil_socket_t gniazdo, const char *const naglowek,
 		return 0;
 	rozmiar_wiadomosci = zrob_paczke_danych(win, ack, &wiadomosc);
 	*ostatnio_odebrany_ack = (ssize_t) ack;
-	if (rozmiar_wiadomosci < 0)
+	if (rozmiar_wiadomosci <= 0)
 		return 0;
 	if (write(gniazdo, wiadomosc, (size_t) rozmiar_wiadomosci)
 	    != rozmiar_wiadomosci) {

@@ -244,11 +244,6 @@ void dodaj_klientowi_dane(void *bufor, size_t ile_danych,
 	if (sscanf(bufor, "UPLOAD %zu\n", &nr) != 1)
 		nr = SIZE_MAX;
 	if (klienci[idx]->spodziewany_nr_paczki != nr) {
-		info("Spodziewany numer paczki się nie zgadza, dostaliśmy %i"
-		     " a powinno być %zu", nr,
-		     klienci[idx]->spodziewany_nr_paczki);
-		usun(klienci[idx]);
-		klienci[idx] = NULL;
 		return;
 	}
 	if (!klienci[idx]->potwierdzil_numer ||
